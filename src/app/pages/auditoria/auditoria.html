@@ -1,0 +1,147 @@
+<div class="aud-body">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">🔍 Auditoría del Sistema</div>
+      <div class="page-sub">Registro de todas las acciones realizadas por los usuarios</div>
+    </div>
+    <div class="header-actions">
+      <span class="badge badge-total">{{registros.length}} registros</span>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label class="filter-label">Módulo</label>
+      <select class="input-field filter-select" [(ngModel)]="filtroModulo" (change)="aplicarFiltros()">
+        <option value="">Todos</option>
+        <option *ngFor="let m of modulos" [value]="m">{{m}}</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Acción</label>
+      <select class="input-field filter-select" [(ngModel)]="filtroAccion" (change)="aplicarFiltros()">
+        <option value="">Todas</option>
+        <option *ngFor="let a of acciones" [value]="a">{{a}}</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Usuario</label>
+      <input type="text" class="input-field filter-select" [(ngModel)]="filtroUsuario"
+        (input)="aplicarFiltros()" placeholder="Buscar usuario...">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Desde</label>
+      <input type="date" class="input-field filter-select" [(ngModel)]="filtroDesde" (change)="aplicarFiltros()">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Hasta</label>
+      <input type="date" class="input-field filter-select" [(ngModel)]="filtroHasta" (change)="aplicarFiltros()">
+    </div>
+    <button class="btn btn-secondary btn-sm" (click)="limpiarFiltros()">✖ Limpiar</button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="table-card">
+    <div class="tbl-wrap">
+      <div *ngIf="loading" class="empty-state">
+        <div class="empty-icon">⏳</div>
+        <p>Cargando registros...</p>
+      </div>
+      <div *ngIf="!loading && filtrados.length === 0" class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <p>No hay registros que coincidan con los filtros.</p>
+      </div>
+      <table *ngIf="!loading && filtrados.length > 0" class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Rol</th>
+            <th>Módulo</th>
+            <th>Acción</th>
+            <th>Descripción</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of filtrados">
+            <td class="td-id">{{r.id_auditoria}}</td>
+            <td class="td-fecha">{{fmtFecha(r.fecha)}}</td>
+            <td class="td-user">
+              <span class="user-chip-sm">{{r.usuario?.nombre_usuario || '—'}}</span>
+            </td>
+            <td>
+              <span class="badge" [ngClass]="rolClass(r.rol?.nombre)">{{r.rol?.nombre || '—'}}</span>
+            </td>
+            <td>
+              <span class="mod-chip">{{modIcon(r.modulo)}} {{r.modulo}}</span>
+            </td>
+            <td>
+              <span class="badge" [ngClass]="accionClass(r.accion)">{{r.accion}}</span>
+            </td>
+            <td class="td-desc">{{r.descripcion}}</td>
+            <td>
+              <button *ngIf="r.detalle" class="btn-icon btn-detail" (click)="verDetalle(r)" title="Ver detalle">
+                👁
+              </button>
+              <span *ngIf="!r.detalle" class="no-detail">—</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal detalle -->
+<div class="modal-overlay" [class.show]="modalOpen" (click)="cerrarModal()">
+  <div class="modal-box modal-lg" (click)="$event.stopPropagation()" *ngIf="selected">
+    <div class="modal-title">🔍 Detalle de Acción — {{selected.accion}} en {{selected.modulo}}</div>
+    <div class="modal-meta">
+      <span>👤 {{selected.usuario?.nombre_usuario}}</span>
+      <span>📅 {{fmtFecha(selected.fecha)}}</span>
+      <span class="badge" [ngClass]="accionClass(selected.accion)">{{selected.accion}}</span>
+    </div>
+    <p class="modal-desc">{{selected.descripcion}}</p>
+
+    <div class="diff-grid" *ngIf="selected.detalle">
+      <div class="diff-col" *ngIf="selected.detalle.antes">
+        <div class="diff-title diff-antes">📋 Antes</div>
+        <div class="diff-body">
+          <div class="diff-row" *ngFor="let k of getKeys(selected.detalle.antes)">
+            <span class="diff-key">{{k}}</span>
+            <span class="diff-val antes-val">{{fmt(selected.detalle.antes[k])}}</span>
+          </div>
+        </div>
+      </div>
+      <div class="diff-col" *ngIf="selected.detalle.despues">
+        <div class="diff-title diff-despues">✅ Después</div>
+        <div class="diff-body">
+          <div class="diff-row" *ngFor="let k of getKeys(selected.detalle.despues)"
+               [class.changed]="hasChanged(k)">
+            <span class="diff-key">{{k}}</span>
+            <span class="diff-val despues-val">{{fmt(selected.detalle.despues[k])}}</span>
+          </div>
+        </div>
+      </div>
+      <div class="diff-col full-col" *ngIf="!selected.detalle.antes && !selected.detalle.despues">
+        <div class="diff-title diff-despues">📄 Datos</div>
+        <div class="diff-body">
+          <div class="diff-row" *ngFor="let k of getKeys(selected.detalle)">
+            <span class="diff-key">{{k}}</span>
+            <span class="diff-val">{{fmt(selected.detalle[k])}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="cerrarModal()">Cerrar</button>
+    </div>
+  </div>
+</div>

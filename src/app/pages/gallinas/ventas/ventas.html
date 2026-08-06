@@ -1,0 +1,151 @@
+<div class="tab-panel">
+  <div class="two-col-layout">
+
+    <!-- Formulario venta -->
+    <div class="form-section">
+      <div class="form-section-title">{{ svc.ventaFormTitle }}</div>
+
+      <div class="input-group">
+        <label class="input-label">Cliente *</label>
+        <input class="input-field" [(ngModel)]="svc.ventaForm.cliente" placeholder="Nombre del cliente">
+      </div>
+
+      <div class="two-col-form">
+        <div class="input-group">
+          <label class="input-label">Fecha</label>
+          <input class="input-field" type="date" [(ngModel)]="svc.ventaForm.fecha">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Lote</label>
+          <select class="input-field" [(ngModel)]="svc.ventaForm.lote_id">
+            <option value="">Seleccionar...</option>
+            @for (l of svc.lotes; track l._id) {
+            <option [value]="l._id">{{ l.id }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="two-col-form">
+        <div class="input-group">
+          <label class="input-label">Cantidad *</label>
+          <input class="input-field" type="number" [(ngModel)]="svc.ventaForm.cant" (input)="svc.calcVentaTotal()"
+            placeholder="0">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Precio Unitario *</label>
+          <input class="input-field" type="number" [(ngModel)]="svc.ventaForm.precio" (input)="svc.calcVentaTotal()"
+            placeholder="0">
+        </div>
+      </div>
+
+      <!-- Total calculado automáticamente -->
+      <div class="input-group">
+        <label class="input-label">Total</label>
+        <input class="input-field" [value]="svc.ventaTotal" readonly style="background:#f5f5f5;font-weight:700">
+      </div>
+
+      <!-- Forma de pago: selector con opción de agregar -->
+      <div class="input-group">
+        <label class="input-label">
+          Forma de Pago
+          <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('formasPago','Forma de Pago')"
+            title="Agregar forma de pago">+</button>
+        </label>
+        <select class="input-field" [(ngModel)]="svc.ventaForm.pago">
+          @for (o of svc.opciones.formasPago; track o) {
+          <option [value]="o">{{ o }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label">Observaciones</label>
+        <textarea class="input-field" [(ngModel)]="svc.ventaForm.obs" rows="2"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" (click)="svc.guardarVenta()" [disabled]="!svc.puedeGuardar(svc.editingVentaId)">Guardar</button>
+        <button class="btn btn-secondary"
+          (click)="svc.ventaForm=svc.newVentaForm();svc.editingVentaId=null;svc.ventaFormTitle='Registrar Venta';svc.ventaTotal='$0'">Limpiar</button>
+      </div>
+    </div>
+
+    <!-- Tabla ventas -->
+    <div class="list-section">
+
+      <div class="section-header-block">
+        <div class="section-header-left">
+          <span class="section-main-title">Ventas Registradas</span>
+          @if (svc.ventasTotales) {
+          <span class="section-kpi accent">Total: <strong>{{ svc.ventasTotales.dinero }}</strong> &nbsp;·&nbsp; {{ svc.ventasTotales.gallinas }} gal. &nbsp;·&nbsp; {{ svc.ventasTotales.transacciones }} transac.</span>
+          }
+        </div>
+      </div>
+      <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Buscar</label>
+    <input class="input-field" [(ngModel)]="svc.ventaSearch" (input)="svc.filterVentas()" placeholder="Cliente, lote o pago...">
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.ventaPageSize" (change)="svc.onChange_ventaSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize('venta', $event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.ventaSearch='';svc.filterVentas()"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Cliente</th>
+            <th>Cant.</th>
+            <th>Total</th>
+            <th>Pago</th>
+            <th>Acc.</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (svc.ventasFiltered.length === 0) {
+          <tr>
+            <td colspan="6" class="empty-cell">Sin ventas.</td>
+          </tr>
+          }
+          @for (r of svc.ventasPage; track r._id) {
+          <tr>
+            <td>{{ svc.fmtDate(r.fecha) }}</td>
+            <td><strong>{{ r.cliente }}</strong></td>
+            <td>{{ svc.fmtNum(r.cant) }}</td>
+            <td><strong class="text-success">{{ svc.fmtMoney(r.cant * r.precio) }}</strong></td>
+            <td>{{ r.pago }}</td>
+            <td class="td-actions">
+              <button class="btn btn-secondary btn-sm" (click)="svc.editVenta(r)" [disabled]="!svc.puedeEditarModulo">Editar</button>
+              <button class="btn btn-danger btn-sm" (click)="svc.elimVenta(r)" [disabled]="!svc.puedeEliminar">Eliminar</button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="za-pag-bar">
+        <span class="za-pag-info">{{ svc.ventasFiltered.length }} ventas</span>
+        @if (svc.totalPagVentas > 1) {
+        <div class="za-pagination">
+          <button class="za-page-btn" (click)="svc.ventaPage=svc.ventaPage-1" [disabled]="svc.ventaPage===1">&#8249;</button>
+          @for (p of svc.pagesVisibles(svc.totalPagVentas, svc.ventaPage); track p) {
+            @if (p === -1) { <span class="za-page-dots">…</span> }
+            @else { <button class="za-page-btn" [class.za-active]="svc.ventaPage===p" (click)="svc.ventaPage=p">{{ p }}</button> }
+          }
+          <button class="za-page-btn" (click)="svc.ventaPage=svc.ventaPage+1" [disabled]="svc.ventaPage===svc.totalPagVentas">&#8250;</button>
+        </div>
+        }
+      </div>
+    </div>
+
+  </div>
+</div>

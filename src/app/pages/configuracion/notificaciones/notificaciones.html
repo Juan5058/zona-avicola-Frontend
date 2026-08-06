@@ -1,0 +1,315 @@
+
+        <div class="sub-tabs">
+          <button class="sub-tab" [class.za-active]="svc.notifTab === 'reglas'"   (click)="svc.onNotifTabChange('reglas')">Reglas de alertas</button>
+          <button class="sub-tab" [class.za-active]="svc.notifTab === 'historial'" (click)="svc.onNotifTabChange('historial')">
+            Historial
+            @if (svc.historialNoLeidas > 0) { <span class="tab-badge">{{ svc.historialNoLeidas }}</span> }
+          </button>
+        </div>
+
+        <!-- ═══ REGLAS ═══ -->
+        @if (svc.notifTab === 'reglas') {
+
+          <!-- KPIs de reglas -->
+          <div class="notif-kpi-row">
+            <div class="notif-kpi">
+              <span class="notif-kpi-n">{{ svc.reglaStats.total }}</span>
+              <span class="notif-kpi-l">Total reglas</span>
+            </div>
+            <div class="notif-kpi notif-kpi-on">
+              <span class="notif-kpi-n">{{ svc.reglaStats.activas }}</span>
+              <span class="notif-kpi-l">Activas</span>
+            </div>
+            <div class="notif-kpi notif-kpi-critica">
+              <span class="notif-kpi-n">{{ svc.reglaStats.criticas }}</span>
+              <span class="notif-kpi-l">Criticas activas</span>
+            </div>
+            <div class="notif-kpi notif-kpi-alerta">
+              <span class="notif-kpi-n">{{ svc.reglaStats.alertas }}</span>
+              <span class="notif-kpi-l">Alertas activas</span>
+            </div>
+            <div class="notif-kpi notif-kpi-off">
+              <span class="notif-kpi-n">{{ svc.reglaStats.inactivas }}</span>
+              <span class="notif-kpi-l">Inactivas</span>
+            </div>
+          </div>
+
+          <!-- Filtros de reglas: módulo + severidad -->
+          <div class="notif-filtros-row">
+            <!-- Filtro por módulo -->
+            <div class="notif-filtro-grupo">
+              <span class="notif-filtro-label">Módulo</span>
+              <div class="notif-filtro-btns">
+                <button class="sub-tab" [class.za-active]="svc.moduloReglaActivo === ''" (click)="svc.moduloReglaActivo = ''; svc.reglaPage = 1">Todos</button>
+                @for (m of svc.modulosReglas; track m) {
+                  <button class="sub-tab mod-tag-btn"
+                    [class.za-active]="svc.moduloReglaActivo === m"
+                    [style.--mod-color]="svc.moduloColor(m)"
+                    (click)="svc.moduloReglaActivo = m; svc.reglaPage = 1">{{ m }}</button>
+                }
+              </div>
+            </div>
+            <!-- Filtro por severidad -->
+            <div class="notif-filtro-grupo">
+              <span class="notif-filtro-label">Severidad</span>
+              <div class="notif-filtro-btns">
+                <button class="sub-tab" [class.za-active]="svc.severidadFiltro === ''" (click)="svc.severidadFiltro = ''; svc.reglaPage = 1">Todas</button>
+                <button class="sev-filter-btn sev-info"    [class.za-active]="svc.severidadFiltro === 'info'"    (click)="svc.severidadFiltro = 'info'; svc.reglaPage = 1">Info</button>
+                <button class="sev-filter-btn sev-alerta"  [class.za-active]="svc.severidadFiltro === 'alerta'"  (click)="svc.severidadFiltro = 'alerta'; svc.reglaPage = 1">Alerta</button>
+                <button class="sev-filter-btn sev-critica" [class.za-active]="svc.severidadFiltro === 'critica'" (click)="svc.severidadFiltro = 'critica'; svc.reglaPage = 1">Critica</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-card">
+            <div class="reglas-card-header">
+              <div class="sub-card-title" style="margin-bottom:0">
+                Reglas configuradas
+                <span class="reglas-count-chip">{{ svc.reglasFiltradas.length }}</span>
+              </div>
+              <div class="reglas-card-actions">
+
+                <button class="btn btn-secondary btn-sm" (click)="svc.activarTodas()" title="Activar todas las visibles">Activar visibles</button>
+                <button class="btn btn-secondary btn-sm" (click)="svc.desactivarTodas()" title="Desactivar todas las visibles">Desactivar visibles</button>
+                <div class="per-page-group" style="margin-left:8px">
+                  <label class="filter-label" style="margin-bottom:0">Por pág:</label>
+                  <div class="per-page-row">
+                    <select class="per-page-select" [value]="svc.reglaPageSize" (change)="svc.onChangeReglaSize($event)">
+                      <option [value]="10">10</option><option [value]="15">15</option><option [value]="25">25</option><option [value]="50">50</option>
+                    </select>
+                    <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSizeRegla($event)">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="cfg-helper" style="margin-top:10px">Activa o desactiva cada regla y ajusta el umbral. Los cambios son efectivos al guardar.</p>
+
+            <div class="reglas-list">
+              @if (svc.reglasFiltradas.length === 0) {
+                <div class="td-empty">Sin reglas con los filtros aplicados</div>
+              }
+              @for (r of svc.reglaPage_data; track r.id) {
+                <div class="regla-item" [class.regla-on]="r.activa">
+                  <div class="regla-left-col">
+                    <div class="regla-modulo-tag" [style.background]="svc.moduloColor(r.modulo) + '18'" [style.color]="svc.moduloColor(r.modulo)">{{ r.modulo }}</div>
+                    <span class="regla-sev-badge" [ngClass]="svc.severidadClass(r.severidad)">{{ svc.severidadLabel(r.severidad) }}</span>
+                  </div>
+                  <div class="regla-info">
+                    <div class="regla-nombre">{{ r.nombre }}</div>
+                    <div class="regla-desc">{{ r.desc }}</div>
+                    @if (r.tieneUmbral) {
+                      <div class="regla-umbral">
+                        Condicion: si supera
+                        <input class="umbral-input" type="number" [(ngModel)]="r.umbral" [min]="0">
+                        {{ r.unidad }}
+                      </div>
+                    } @else {
+                      <div class="regla-umbral">Condicion: al ocurrir el evento</div>
+                    }
+                  </div>
+                  <div class="regla-toggle-wrap">
+                    <div class="toggle" [class.on]="r.activa" (click)="r.activa = !r.activa">
+                      <div class="toggle-thumb"></div>
+                    </div>
+                    <span class="toggle-label">{{ r.activa ? 'Activa' : 'Inactiva' }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Paginacion reglas -->
+            <div class="za-pag-bar">
+              <span class="za-pag-info">{{ svc.reglasFiltradas.length }} reglas</span>
+              @if (svc.totalPagRegla > 1) {
+              <div class="za-pagination">
+                <button class="za-page-btn" (click)="svc.reglaPage=svc.reglaPage-1" [disabled]="svc.reglaPage===1">&lsaquo;</button>
+                @for (p of svc.pagesVisibles(svc.totalPagRegla, svc.reglaPage); track p) {
+                  @if (p === -1) { <span class="za-page-dots">…</span> }
+                  @else { <button class="za-page-btn" [class.za-active]="svc.reglaPage===p" (click)="svc.reglaPage=p">{{ p }}</button> }
+                }
+                <button class="za-page-btn" (click)="svc.reglaPage=svc.reglaPage+1" [disabled]="svc.reglaPage===svc.totalPagRegla">&rsaquo;</button>
+              </div>
+              }
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-primary" (click)="svc.guardarReglas()">Guardar reglas</button>
+            </div>
+          </div>
+
+          <div class="sub-stats-bar">
+            <div class="sub-stat-item">
+              <span class="sub-stat-n">{{ svc.reglaStats.total }}</span>
+              <span class="sub-stat-l">Total</span>
+            </div>
+            <div class="sub-stat-item">
+              <span class="sub-stat-n">{{ svc.reglaStats.activas }}</span>
+              <span class="sub-stat-l">Activas</span>
+            </div>
+            <div class="sub-stat-item">
+              <span class="sub-stat-n">{{ svc.reglaStats.inactivas }}</span>
+              <span class="sub-stat-l">Inactivas</span>
+            </div>
+            <div class="sub-stat-item">
+              <span class="sub-stat-n">{{ svc.reglaStats.criticas }}</span>
+              <span class="sub-stat-l">Criticas ON</span>
+            </div>
+          </div>
+        }
+
+        <!-- ═══ HISTORIAL ═══ -->
+        @if (svc.notifTab === 'historial') {
+          <!-- KPIs historial -->
+          <div class="notif-kpi-row">
+            <div class="notif-kpi">
+              <span class="notif-kpi-n">{{ svc.historialStats().total }}</span>
+              <span class="notif-kpi-l">Total</span>
+            </div>
+            <div class="notif-kpi notif-kpi-off" style="border-color:#e0e0e0">
+              <span class="notif-kpi-n" style="color:#e65100">{{ svc.historialStats().noLeidas }}</span>
+              <span class="notif-kpi-l">Sin leer</span>
+            </div>
+            <div class="notif-kpi" style="border-color:#e3f2fd">
+              <span class="notif-kpi-n" style="color:#1565c0">{{ svc.historialStats().info }}</span>
+              <span class="notif-kpi-l">Info</span>
+            </div>
+            <div class="notif-kpi notif-kpi-alerta">
+              <span class="notif-kpi-n">{{ svc.historialStats().alertas }}</span>
+              <span class="notif-kpi-l">Alertas</span>
+            </div>
+            <div class="notif-kpi notif-kpi-critica">
+              <span class="notif-kpi-n">{{ svc.historialStats().errores }}</span>
+              <span class="notif-kpi-l">Errores</span>
+            </div>
+          </div>
+
+          <div class="sub-card">
+            <div class="notif-hist-header">
+              <div>
+                <div class="sub-card-title" style="margin-bottom:2px">Historial de notificaciones</div>
+                @if (svc.historialNoLeidas > 0) {
+                  <div class="notif-hist-unread-hint">
+                    <span class="notif-nueva">{{ svc.historialNoLeidas }} sin leer</span>
+                  </div>
+                }
+              </div>
+              <div class="notif-hist-actions">
+                @if (svc.historialNoLeidas > 0) {
+                  <button class="btn btn-secondary btn-sm" (click)="svc.marcarTodasLeidas()">✓ Leer todas</button>
+                }
+                <button class="btn btn-danger btn-sm" (click)="svc.eliminarTodasLeidas()" [disabled]="svc.historial.length - svc.historialNoLeidas === 0">
+                  Limpiar leidas
+                </button>
+                <button class="btn btn-secondary btn-sm" (click)="svc.cargarHistorial()" [disabled]="svc.loadingHistorial">
+                  {{ svc.loadingHistorial ? 'Cargando...' : '↺ Recargar' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="sub-card-toolbar">
+              <select class="input-field" [(ngModel)]="svc.historialModulo" (change)="svc.filterHistorial()" style="width:170px">
+                <option value="">Todos los modulos</option>
+                @for (m of svc.modulosReglas; track m) { <option [value]="m">{{ m }}</option> }
+              </select>
+              <select class="input-field" [(ngModel)]="svc.historialTipo" (change)="svc.filterHistorial()" style="width:150px">
+                <option value="">Todos los tipos</option>
+                <option value="Info">Info</option>
+                <option value="Alerta">Alerta</option>
+                <option value="Error">Error</option>
+              </select>
+              <label class="notif-check-label">
+                <input type="checkbox" [(ngModel)]="svc.historialSoloNoLeidas" (change)="svc.filterHistorial()">
+                Solo no leidas
+              </label>
+              <div class="per-page-group" style="margin-left:auto">
+                <label class="filter-label" style="margin-bottom:0">Por pág:</label>
+                <div class="per-page-row">
+                  <select class="per-page-select" [value]="svc.historialPageSize" (change)="svc.onChangeHistorialSize($event)">
+                    <option [value]="10">10</option><option [value]="15">15</option><option [value]="25">25</option><option [value]="50">50</option>
+                  </select>
+                  <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSizeHistorial($event)">
+                </div>
+              </div>
+            </div>
+
+            @if (svc.loadingHistorial) {
+              <div class="td-empty">Cargando historial...</div>
+            }
+            @if (!svc.loadingHistorial && svc.historialFiltradas.length === 0) {
+              <div class="td-empty">
+                {{ svc.historial.length === 0 ? 'Sin notificaciones — el backend aun no ha generado ninguna' : 'Sin resultados con los filtros aplicados' }}
+              </div>
+            }
+            @if (!svc.loadingHistorial && svc.historialFiltradas.length > 0) {
+              <div class="notif-list">
+                @for (n of svc.historialPage_data; track n.id_notificacion) {
+                  <div class="notif-item" [class.notif-no-leida]="!n.leida" [class.notif-borrada]="n._borrada">
+                    <div class="notif-tipo-dot" [ngClass]="svc.tipoDotClass(n.tipo)"></div>
+                    <div class="notif-content">
+                      <div class="notif-head">
+                        @if (n.modulo) { <span class="notif-modulo-tag" [style.background]="svc.moduloColor(n.modulo) + '18'" [style.color]="svc.moduloColor(n.modulo)">{{ n.modulo }}</span> }
+                        <span class="badge notif-tipo-badge" [ngClass]="svc.tipoBadgeClass(n.tipo)">{{ n.tipo }}</span>
+                        @if (!n.leida) { <span class="notif-nueva">NUEVA</span> }
+                        @if (n._borrada) { <span class="notif-borrada-chip">Borrada del panel</span> }
+                        @if (n._manual) { <span class="notif-manual-chip">Manual</span> }
+                      </div>
+                      @if (n.titulo) {
+                        <div class="notif-titulo">{{ n.titulo }}</div>
+                      }
+                      <div class="notif-mensaje">{{ n.mensaje }}</div>
+                      <div class="notif-fecha">
+                        {{ svc.fmtRelativo(n.fecha ?? n.fecha_creacion) }}
+                        <span style="color:#c8e6c9; margin: 0 4px">·</span>
+                        {{ svc.fmtDateTime(n.fecha ?? n.fecha_creacion) }}
+                      </div>
+                    </div>
+                    <div class="notif-actions">
+                      @if (!n.leida) {
+                        <button class="btn btn-secondary btn-sm" (click)="svc.marcarLeida(n)">✓ Leida</button>
+                      } @else {
+                        <span class="notif-leida-chip">Leida</span>
+                      }
+                      @if (!n._borrada) {
+                        <button class="btn btn-danger btn-sm" (click)="svc.eliminarNotif(n)">Borrar</button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Paginacion historial -->
+              <div class="za-pag-bar">
+                <span class="za-pag-info">{{ svc.historialFiltradas.length }} notificaciones</span>
+                @if (svc.totalPagHistorial > 1) {
+                <div class="za-pagination">
+                  <button class="za-page-btn" (click)="svc.historialPage=svc.historialPage-1" [disabled]="svc.historialPage===1">&lsaquo;</button>
+                  @for (p of svc.pagesVisibles(svc.totalPagHistorial, svc.historialPage); track p) {
+                    @if (p === -1) { <span class="za-page-dots">…</span> }
+                    @else { <button class="za-page-btn" [class.za-active]="svc.historialPage===p" (click)="svc.historialPage=p">{{ p }}</button> }
+                  }
+                  <button class="za-page-btn" (click)="svc.historialPage=svc.historialPage+1" [disabled]="svc.historialPage===svc.totalPagHistorial">&rsaquo;</button>
+                </div>
+                }
+              </div>
+            }
+          </div>
+
+          <div class="sub-stats-bar">
+            <div class="sub-stat-item">
+              <span class="sub-stat-n">{{ svc.historial.length }}</span>
+              <span class="sub-stat-l">Total</span>
+            </div>
+            <div class="sub-stat-item">
+              <span class="sub-stat-n" style="color:#e65100">{{ svc.historialNoLeidas }}</span>
+              <span class="sub-stat-l">Sin leer</span>
+            </div>
+            <div class="sub-stat-item">
+              <span class="sub-stat-n">{{ svc.historial.length - svc.historialNoLeidas }}</span>
+              <span class="sub-stat-l">Leidas</span>
+            </div>
+            <div class="sub-stat-item">
+              <span class="sub-stat-n">{{ svc.historialFiltradas.length }}</span>
+              <span class="sub-stat-l">Filtradas</span>
+            </div>
+          </div>
+        }

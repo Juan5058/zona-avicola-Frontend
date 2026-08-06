@@ -1,0 +1,228 @@
+/* ===== LOGIN ===== */
+:host {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.bg-cover {
+  position: absolute;
+  inset: 0;
+  background: url('/logingallinas.jpeg') center/cover no-repeat;
+  filter: brightness(0.52) saturate(1.1);
+}
+
+.center-wrap {
+  position: relative;
+  z-index: 10;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-card {
+  background: white;
+  border: 1px solid #e3e8ea;
+  border-radius: 18px;
+  padding: 64px 56px;
+  width: 480px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  animation: cardIn 0.35s cubic-bezier(0.22, 0.68, 0, 1.3);
+}
+@keyframes cardIn {
+  from { transform: translateY(30px) scale(0.96); opacity: 0; }
+  to   { transform: translateY(0) scale(1);       opacity: 1; }
+}
+
+.logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+.logo-circle {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  border: 3px solid #39b54a;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(57, 181, 74, 0.35);
+}
+.logo-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.login-title {
+  text-align: center;
+  font-size: 29px;
+  font-weight: 800;
+  color: #2c3e50;
+  margin-bottom: 5px;
+}
+.login-sub {
+  text-align: center;
+  font-size: 15px;
+  color: #7f8c8d;
+  margin-bottom: 30px;
+}
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 7px;
+}
+.field-wrap {
+  background: #f8f9fa;
+  border: 2px solid #dfe4ea;
+  border-radius: 11px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  transition: border-color 0.18s;
+}
+.field-wrap:focus-within {
+  border-color: #39b54a;
+  background: #f0fff4;
+}
+.field-wrap.err {
+  border-color: #e53935;
+}
+.field-icon {
+  display: flex;
+  align-items: center;
+  color: #7f8c8d;
+  flex-shrink: 0;
+}
+.field-wrap:focus-within .field-icon {
+  color: #39b54a;
+}
+.field-wrap.err .field-icon {
+  color: #e53935;
+}
+.field-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  color: #333;
+  outline: none;
+  font-family: inherit;
+}
+.field-input::placeholder {
+  color: #b2bec3;
+}
+.toggle-pw {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: #95a5a6;
+  padding: 0;
+  pointer-events: auto;
+  z-index: 10;
+  position: relative;
+  transition: color 0.15s;
+}
+.toggle-pw:hover {
+  color: #39b54a;
+}
+
+.error-box {
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  border-radius: 9px;
+  padding: 12px 16px;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.error-box.show {
+  display: flex;
+  animation: shake 0.35s ease;
+}
+.err-icon {
+  display: flex;
+  align-items: center;
+  color: #e53935;
+  flex-shrink: 0;
+}
+.error-box span:last-child {
+  font-size: 14px;
+  color: #c62828;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0);  }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px);  }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px);  }
+}
+
+.btn-login {
+  width: 100%;
+  padding: 16px;
+  background: #39b54a;
+  color: white;
+  border: none;
+  border-radius: 11px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  margin-bottom: 12px;
+  font-family: inherit;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-login:hover    { background: #2e9940; }
+.btn-login:disabled { background: #ccc; cursor: not-allowed; }
+
+/* boton acceso sin cuenta */
+.btn-invitado {
+  width: 100%;
+  padding: 13px;
+  background: transparent;
+  color: #7f8c8d;
+  border: 2px solid #dfe4ea;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 22px;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-invitado:hover {
+  border-color: #39b54a;
+  color: #39b54a;
+}
+
+.divider {
+  height: 1px;
+  background: #e8eaed;
+  margin: 0 0 14px;
+}
+.footer-txt {
+  text-align: center;
+  font-size: 11.5px;
+  color: #b2bec3;
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    width: 90%;
+    padding: 30px 22px;
+  }
+}

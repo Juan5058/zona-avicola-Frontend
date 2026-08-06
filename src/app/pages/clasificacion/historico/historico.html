@@ -1,0 +1,165 @@
+<!-- ══════════════════════════════════
+     HISTORIAL
+════════════════════════════════════ -->
+<div class="hist-section">
+
+  <div class="hist-header">
+    <div class="section-title" style="margin:0">Historial de Clasificacion</div>
+  </div>
+
+  @if (svc.histFiltered.length > 0) {
+  <div class="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-val">{{ svc.kpiTotalHuevos }}</div>
+      <div class="kpi-label">Total huevos</div>
+    </div>
+    <div class="kpi-card kpi-card-panales">
+      <div class="kpi-val kpi-green">{{ svc.kpiPanales }}</div>
+      <div class="kpi-label">Panales completos</div>
+      <div class="kpi-panal-desglose">
+        @for (c of svc.cats; track c.id) {
+        @if (svc.kpiPanalesPorCat[c.id] > 0) {
+        <span class="kpi-panal-tag" [style.color]="c.color">
+          {{ c.label }}: {{ svc.kpiPanalesPorCat[c.id] }}
+        </span>
+        }
+        }
+      </div>
+    </div>
+    <div class="kpi-card" [class.kpi-warn]="svc.kpiDanados > 0">
+      <div class="kpi-val" [class.kpi-red]="svc.kpiDanados > 0">{{ svc.kpiDanados }}</div>
+      <div class="kpi-label">Danados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val kpi-purple">{{ svc.kpiCategoriaDominante }}</div>
+      <div class="kpi-label">Categoria dominante</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val">{{ svc.kpiPromedio }}</div>
+      <div class="kpi-label">Promedio por registro</div>
+    </div>
+  </div>
+  }
+
+  <!-- filtros -->
+  <div class="section-header-block">
+    <div class="section-header-left">
+      <span class="section-main-title">Historial de Clasificación</span>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label class="filter-label">Buscar lote</label>
+      <input class="input-field" [(ngModel)]="svc.histSearch" (input)="svc.filtrarHist()" placeholder="Lote...">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Jornada</label>
+      <select class="input-field" [(ngModel)]="svc.histJornada" (change)="svc.filtrarHist()">
+        <option value="">Todas</option>
+        @for (j of svc.jornadas; track j) { <option [value]="j">{{ j }}</option> }
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Desde</label>
+      <input class="input-field" type="date" [(ngModel)]="svc.histFechaDesde" (change)="svc.filtrarHist()">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Hasta</label>
+      <input class="input-field" type="date" [(ngModel)]="svc.histFechaHasta" (change)="svc.filtrarHist()">
+    </div>
+    <div class="per-page-group">
+      <label class="filter-label">Por pág:</label>
+      <div class="per-page-row">
+        <select class="per-page-select" [value]="svc.histPageSize" (change)="svc.onChange_histSize($event)">
+          <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+        </select>
+        <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize($event)">
+      </div>
+    </div>
+    <button class="btn-limpiar" (click)="svc.limpiarFiltros()">✕ Limpiar</button>
+  </div>
+
+  <!-- tabla historial -->
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="col-fecha">Fecha</th>
+          <th class="col-lote">Lote</th>
+          <th class="col-jornada">Jornada</th>
+          <th class="col-categorias">Categorías</th>
+          <th class="col-dan">Dan.</th>
+          <th class="col-total">Total</th>
+          <th class="col-modo">Modo</th>
+          <th class="col-acc">Acc.</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (svc.histFiltered.length === 0) {
+        <tr>
+          <td colspan="8" class="empty-cell">
+            Sin registros de clasificacion.
+          </td>
+        </tr>
+        }
+        @for (r of svc.histPage_data; track r._id) {
+        @let panales = svc.calcularPanalesPorCat(r.counts);
+        <tr>
+          <td class="fecha-cell">{{ svc.fmtDate(r.fecha) }}</td>
+          <td><strong>{{ r.lote }}</strong></td>
+          <td>{{ r.jornada }}</td>
+          <td class="cat-chips-cell">
+            @for (c of svc.cats; track c.id) {
+            @if ((r.counts[c.id] || 0) > 0) {
+            <span class="cat-chip" [style.color]="c.color">
+              <strong>{{ c.label }}</strong> {{ r.counts[c.id] }}
+              <em class="cat-chip-sub">
+                {{ panales.porCat[c.id].completos }}p
+                @if (panales.porCat[c.id].sobrantes > 0) {
+                +{{ panales.porCat[c.id].sobrantes }}
+                }
+              </em>
+            </span>
+            }
+            }
+          </td>
+          <td class="num-cell" [class.text-red]="r.danados > 0">{{ r.danados }}</td>
+          <td class="num-cell"><strong>{{ r.total }}</strong></td>
+          <td>
+            <span class="badge"
+                  [class.badge-green]="r.modo === 'Automatico'"
+                  [class.badge-blue]="r.modo !== 'Automatico'">
+              {{ r.modo === 'Automatico' ? 'Auto' : 'Manual' }}
+            </span>
+          </td>
+          <td>
+            <div class="td-actions">
+              <button class="btn btn-secondary btn-xs"
+                      (click)="svc.editClasificacion(r)"
+                      [disabled]="!svc.puedeEditarModulo">Editar</button>
+              <button class="btn btn-danger btn-xs"
+                      (click)="svc.elimClasificacion(r)"
+                      [disabled]="!svc.puedeEliminar">Elim.</button>
+            </div>
+          </td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="za-pag-bar">
+    <span class="za-pag-info">{{ svc.histFiltered.length }} registros</span>
+    @if (svc.totalPagHist > 1) {
+    <div class="za-pagination">
+      <button class="za-page-btn" (click)="svc.histPage=svc.histPage-1" [disabled]="svc.histPage===1">&lsaquo;</button>
+      @for (p of svc.pagesVisibles(svc.totalPagHist, svc.histPage); track p) {
+        @if (p === -1) { <span class="za-page-dots">…</span> }
+        @else { <button class="za-page-btn" [class.za-active]="svc.histPage===p" (click)="svc.histPage=p">{{ p }}</button> }
+      }
+      <button class="za-page-btn" (click)="svc.histPage=svc.histPage+1" [disabled]="svc.histPage===svc.totalPagHist">&rsaquo;</button>
+    </div>
+    }
+  </div>
+
+</div>

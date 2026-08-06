@@ -1,0 +1,508 @@
+<!-- ══════════ REPORTES ══════════ -->
+<div class="rep-layout">
+
+  <!-- ── Columna izquierda: tipos de reporte ── -->
+  <div class="rep-sidebar">
+    <div class="section-title">Tipo de Reporte</div>
+    <div class="rep-type-list">
+      @for (t of repTypes; track t.id) {
+        <button class="rep-type-btn" [class.active]="t.id === selectedType.id" (click)="selectType(t)">
+          <div>
+            <div class="rt-label">{{ t.label }}</div>
+            <div class="rt-sub">{{ t.sub }}</div>
+          </div>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- ── Columna derecha: filtros + preview ── -->
+  <div class="rep-main">
+
+    <!-- Filtros -->
+    <div class="filters-bar form-section">
+      <div class="filters-row">
+        <div class="input-group">
+          <label class="input-label">Lote</label>
+          <select class="input-field" [(ngModel)]="loteId">
+            <option value="">Todos los lotes</option>
+            @for (l of lotes; track l.id_lote) {
+              <option [value]="l.id_lote">{{ l.codigo }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Periodo</label>
+          <select class="input-field" [(ngModel)]="periodo" (change)="onPeriodo()">
+            <option value="semana">Esta semana</option>
+            <option value="mes">Este mes</option>
+            <option value="año">Este año</option>
+            <option value="custom">Personalizado</option>
+          </select>
+        </div>
+
+        @if (customRange) {
+          <div class="input-group">
+            <label class="input-label">Desde</label>
+            <input class="input-field" type="date" [(ngModel)]="desde">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Hasta</label>
+            <input class="input-field" type="date" [(ngModel)]="hasta">
+          </div>
+        } @else {
+          <div class="input-group">
+            <label class="input-label">Rango</label>
+            <div class="rango-label">{{ desde }} — {{ hasta }}</div>
+          </div>
+        }
+
+        <div class="input-group input-group-btn">
+          <label class="input-label">&nbsp;</label>
+          <button class="btn btn-primary" (click)="generarReporte()" [disabled]="loading">
+            {{ loading ? 'Generando...' : 'Generar Reporte' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel de preview -->
+    <div class="preview-panel">
+      <div class="preview-header">
+        <div class="section-title" style="margin:0">{{ previewTitle || 'Vista Previa' }}</div>
+        @if (showExport) {
+          <div style="display:flex;gap:8px">
+            @if (puedeDescargar) {
+              <button class="btn btn-danger btn-sm" (click)="descargarPDF()">PDF</button>
+              <button class="btn btn-blue btn-sm"   (click)="descargarExcel()">Excel</button>
+            }
+          </div>
+        }
+      </div>
+
+      @if (!previewData && !loading) {
+        <div class="rep-empty">
+          <p>Selecciona un tipo de reporte y haz clic en <strong>Generar Reporte</strong></p>
+        </div>
+      }
+
+      @if (loading) {
+        <div class="rep-empty">
+          <div class="rep-spinner"></div>
+          <p style="margin-top:12px">Cargando datos...</p>
+        </div>
+      }
+
+      <!-- ══ CLASIFICACIÓN DE HUEVOS ══ -->
+      @if (previewData?.tipo === 'clasificacion') {
+        <div class="kpi-mini-strip">
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ fmtNum(getClasTotal(previewData.data)) }}</div>
+            <div class="kpi-mini-label">Total huevos</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ previewData.data.length }}</div>
+            <div class="kpi-mini-label">Registros</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ fmtNum(getClasPromDia(previewData.data)) }}</div>
+            <div class="kpi-mini-label">Prom. diario</div>
+          </div>
+          <div class="kpi-mini kpi-mini-danger">
+            <div class="kpi-mini-val">{{ getClasDanados(previewData.data) }}</div>
+            <div class="kpi-mini-label">Dañados</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Fecha</th><th>Lote</th><th>Jornada</th><th>Total</th><th>Dañados</th><th>Modo</th></tr>
+            </thead>
+            <tbody>
+              @for (r of previewData.data; track $index) {
+                <tr>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                  <td><span class="badge badge-green">{{ r.lote }}</span></td>
+                  <td>{{ r.jornada }}</td>
+                  <td><strong class="text-green">{{ r.total }}</strong></td>
+                  <td><span [class]="r.danados > 0 ? 'text-red' : ''">{{ r.danados }}</span></td>
+                  <td><span class="badge badge-gray">{{ r.modo }}</span></td>
+                </tr>
+              }
+              @if (!previewData.data.length) {
+                <tr><td colspan="6" class="empty-cell">Sin registros en el periodo</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ══ LOTES ══ -->
+      @if (previewData?.tipo === 'lotes') {
+        <div class="kpi-mini-strip">
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ previewData.data.length }}</div>
+            <div class="kpi-mini-label">Total lotes</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ fmtNum(getTotalAves(previewData.data)) }}</div>
+            <div class="kpi-mini-label">Total aves</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ getLotesActivos(previewData.data) }}</div>
+            <div class="kpi-mini-label">Activos</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ getGalpones(previewData.data) }}</div>
+            <div class="kpi-mini-label">Galpones</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Código</th><th>Raza</th><th>Cantidad</th><th>Galpón</th><th>Estado</th><th>Edad</th><th>Fecha</th></tr>
+            </thead>
+            <tbody>
+              @for (r of previewData.data; track $index) {
+                <tr>
+                  <td><strong>{{ r.codigo }}</strong></td>
+                  <td>{{ r.raza }}</td>
+                  <td>{{ fmtNum(r.cantidad) }}</td>
+                  <td>{{ r.galpon }}</td>
+                  <td><span class="badge badge-green">{{ r.estado }}</span></td>
+                  <td>{{ r.edad }} sem</td>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                </tr>
+              }
+              @if (!previewData.data.length) {
+                <tr><td colspan="7" class="empty-cell">Sin lotes registrados</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ══ SALUD ══ -->
+      @if (previewData?.tipo === 'salud') {
+        <div class="kpi-mini-strip">
+          <div class="kpi-mini kpi-mini-danger">
+            <div class="kpi-mini-val">{{ getMortTotal(previewData.data.mortalidad) }}</div>
+            <div class="kpi-mini-label">Total bajas</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ previewData.data.mortalidad.length }}</div>
+            <div class="kpi-mini-label">Reg. mortalidad</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ previewData.data.tratamientos.length }}</div>
+            <div class="kpi-mini-label">Tratamientos</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ getLotesAfect(previewData.data.mortalidad) }}</div>
+            <div class="kpi-mini-label">Lotes afectados</div>
+          </div>
+        </div>
+
+        <div class="subsection-title">Mortalidad</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Lote</th><th>Cantidad</th><th>Causa</th><th>Observaciones</th></tr></thead>
+            <tbody>
+              @for (r of previewData.data.mortalidad; track $index) {
+                <tr>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                  <td><span class="badge badge-green">{{ r.lote }}</span></td>
+                  <td><strong style="color:#E53935">{{ r.cant }}</strong></td>
+                  <td>{{ r.causa }}</td>
+                  <td class="text-muted">{{ r.obs || '—' }}</td>
+                </tr>
+              }
+              @if (!previewData.data.mortalidad.length) {
+                <tr><td colspan="5" class="empty-cell">Sin bajas en el periodo</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="subsection-title" style="margin-top:16px">Tratamientos</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Lote</th><th>Tipo</th><th>Medicamento</th><th>Dosis</th><th>Veterinario</th></tr></thead>
+            <tbody>
+              @for (r of previewData.data.tratamientos; track $index) {
+                <tr>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                  <td><span class="badge badge-green">{{ r.lote }}</span></td>
+                  <td>{{ r.tipo }}</td>
+                  <td>{{ r.med }}</td>
+                  <td>{{ r.dosis }}</td>
+                  <td>{{ r.vet }}</td>
+                </tr>
+              }
+              @if (!previewData.data.tratamientos.length) {
+                <tr><td colspan="6" class="empty-cell">Sin tratamientos en el periodo</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ══ INVENTARIO GENERAL ══ -->
+      @if (previewData?.tipo === 'inventario') {
+        <div class="kpi-mini-strip">
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ previewData.data.length }}</div>
+            <div class="kpi-mini-label">Items</div>
+          </div>
+          <div class="kpi-mini kpi-mini-green">
+            <div class="kpi-mini-val">{{ fmtMoney(getInvValor(previewData.data)) }}</div>
+            <div class="kpi-mini-label">Valor total</div>
+          </div>
+          <div class="kpi-mini kpi-mini-danger">
+            <div class="kpi-mini-val">{{ getInvCriticos(previewData.data) }}</div>
+            <div class="kpi-mini-label">Críticos</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ getInvAtencion(previewData.data) }}</div>
+            <div class="kpi-mini-label">Atención</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Mínimo</th><th>Unidad</th><th>Costo unit.</th><th>Estado</th></tr>
+            </thead>
+            <tbody>
+              @for (r of previewData.data; track $index) {
+                <tr>
+                  <td><strong>{{ r.nombre }}</strong></td>
+                  <td>{{ r.cat }}</td>
+                  <td [style.color]="r.cant <= r.min ? '#E53935' : r.cant <= r.min*1.5 ? '#e65100' : '#2e9940'">
+                    <strong>{{ fmtNum(r.cant) }}</strong>
+                  </td>
+                  <td>{{ r.min }}</td>
+                  <td>{{ r.unidad }}</td>
+                  <td>{{ fmtMoney(r.costo) }}</td>
+                  <td>
+                    @if (r.cant <= r.min) { <span class="badge badge-red">Crítico</span> }
+                    @else if (r.cant <= r.min * 1.5) { <span class="badge badge-orange">Atención</span> }
+                    @else { <span class="badge badge-green">OK</span> }
+                  </td>
+                </tr>
+              }
+              @if (!previewData.data.length) {
+                <tr><td colspan="7" class="empty-cell">Sin items registrados</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ══ GESTIÓN DE ALIMENTOS ══ -->
+      @if (previewData?.tipo === 'alimentos') {
+        <div class="kpi-mini-strip">
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ previewData.data.alimentos.length }}</div>
+            <div class="kpi-mini-label">Alimentos</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ fmtNum(getAlimStock(previewData.data.alimentos)) }}</div>
+            <div class="kpi-mini-label">Stock total</div>
+          </div>
+          <div class="kpi-mini kpi-mini-danger">
+            <div class="kpi-mini-val">{{ getAlimCriticos(previewData.data.alimentos) }}</div>
+            <div class="kpi-mini-label">Críticos</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ fmtNum(getConsumoTotal(previewData.data.consumo)) }}</div>
+            <div class="kpi-mini-label">Total consumido</div>
+          </div>
+        </div>
+
+        <div class="subsection-title">Stock de Alimentos</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Nombre</th><th>Stock actual</th><th>Stock mínimo</th><th>Unidad</th><th>Proveedor</th><th>Estado</th></tr></thead>
+            <tbody>
+              @for (r of previewData.data.alimentos; track $index) {
+                <tr>
+                  <td><strong>{{ r.nombre }}</strong></td>
+                  <td [style.color]="r.stock <= r.min ? '#E53935' : '#2e9940'">
+                    <strong>{{ fmtNum(r.stock) }}</strong>
+                  </td>
+                  <td>{{ r.min }}</td>
+                  <td>{{ r.unidad }}</td>
+                  <td>{{ r.proveedor }}</td>
+                  <td>
+                    @if (r.stock <= r.min) { <span class="badge badge-red">Crítico</span> }
+                    @else if (r.stock <= r.min * 1.5) { <span class="badge badge-orange">Atención</span> }
+                    @else { <span class="badge badge-green">OK</span> }
+                  </td>
+                </tr>
+              }
+              @if (!previewData.data.alimentos.length) {
+                <tr><td colspan="6" class="empty-cell">Sin alimentos registrados</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="subsection-title" style="margin-top:16px">Consumo en el Periodo</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Alimento</th><th>Cantidad consumida</th><th>Costo unitario</th><th>Lote</th></tr></thead>
+            <tbody>
+              @for (r of previewData.data.consumo; track $index) {
+                <tr>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                  <td><strong>{{ r.alimento }}</strong></td>
+                  <td><strong class="text-green">{{ fmtNum(r.cant) }}</strong></td>
+                  <td>{{ fmtMoney(r.costo) }}</td>
+                  <td><span class="badge badge-green">{{ r.lote }}</span></td>
+                </tr>
+              }
+              @if (!previewData.data.consumo.length) {
+                <tr><td colspan="5" class="empty-cell">Sin consumo registrado en el periodo</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ══ VENTAS ══ -->
+      @if (previewData?.tipo === 'ventas') {
+        <div class="kpi-mini-strip">
+          <div class="kpi-mini kpi-mini-green">
+            <div class="kpi-mini-val">{{ fmtMoney(getVentasTotal(previewData.data)) }}</div>
+            <div class="kpi-mini-label">Total ingresos</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ previewData.data.length }}</div>
+            <div class="kpi-mini-label">Transacciones</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ fmtMoney(getTicketProm(previewData.data)) }}</div>
+            <div class="kpi-mini-label">Ticket prom.</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ getClientes(previewData.data) }}</div>
+            <div class="kpi-mini-label">Clientes</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Fecha</th><th>Cliente</th><th>Lote</th><th>Cantidad</th><th>Precio unit.</th><th>Total</th><th>Forma de pago</th></tr>
+            </thead>
+            <tbody>
+              @for (r of previewData.data; track $index) {
+                <tr>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                  <td><strong>{{ r.cliente }}</strong></td>
+                  <td><span class="badge badge-green">{{ r.lote }}</span></td>
+                  <td>{{ fmtNum(r.cant) }}</td>
+                  <td>{{ fmtMoney(r.precio) }}</td>
+                  <td><strong class="text-green">{{ fmtMoney(r.total) }}</strong></td>
+                  <td>{{ r.pago }}</td>
+                </tr>
+              }
+              @if (!previewData.data.length) {
+                <tr><td colspan="7" class="empty-cell">Sin ventas en el periodo</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ══ INFORME COMPLETO ══ -->
+      @if (previewData?.tipo === 'completo') {
+        <div class="kpi-mini-strip">
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ previewData.data.lotes?.length }}</div>
+            <div class="kpi-mini-label">Lotes</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="kpi-mini-val">{{ fmtNum(getClasTotal(previewData.data.clasificacion)) }}</div>
+            <div class="kpi-mini-label">Huevos</div>
+          </div>
+          <div class="kpi-mini kpi-mini-danger">
+            <div class="kpi-mini-val">{{ getMortTotal(previewData.data.mortalidad) }}</div>
+            <div class="kpi-mini-label">Bajas</div>
+          </div>
+          <div class="kpi-mini kpi-mini-green">
+            <div class="kpi-mini-val">{{ fmtMoney(getVentasTotal(previewData.data.ventas)) }}</div>
+            <div class="kpi-mini-label">Ventas</div>
+          </div>
+        </div>
+
+        <div class="subsection-title">Clasificación (últimos registros)</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Lote</th><th>Jornada</th><th>Total</th><th>Dañados</th></tr></thead>
+            <tbody>
+              @for (r of previewData.data.clasificacion.slice(0,5); track $index) {
+                <tr>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                  <td><span class="badge badge-green">{{ r.lote }}</span></td>
+                  <td>{{ r.jornada }}</td>
+                  <td><strong class="text-green">{{ r.total }}</strong></td>
+                  <td>{{ r.danados }}</td>
+                </tr>
+              }
+              @if (!previewData.data.clasificacion.length) {
+                <tr><td colspan="5" class="empty-cell">Sin registros</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="subsection-title" style="margin-top:14px">Mortalidad</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Lote</th><th>Cantidad</th><th>Causa</th></tr></thead>
+            <tbody>
+              @for (r of previewData.data.mortalidad.slice(0,5); track $index) {
+                <tr>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                  <td><span class="badge badge-green">{{ r.lote }}</span></td>
+                  <td><strong style="color:#E53935">{{ r.cant }}</strong></td>
+                  <td>{{ r.causa }}</td>
+                </tr>
+              }
+              @if (!previewData.data.mortalidad.length) {
+                <tr><td colspan="4" class="empty-cell">Sin bajas</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="subsection-title" style="margin-top:14px">Ventas (últimas transacciones)</div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Cliente</th><th>Lote</th><th>Cantidad</th><th>Total</th></tr></thead>
+            <tbody>
+              @for (r of previewData.data.ventas.slice(0,5); track $index) {
+                <tr>
+                  <td>{{ fmtDate(r.fecha) }}</td>
+                  <td><strong>{{ r.cliente }}</strong></td>
+                  <td><span class="badge badge-green">{{ r.lote }}</span></td>
+                  <td>{{ fmtNum(r.cant) }}</td>
+                  <td><strong class="text-green">{{ fmtMoney(r.total) }}</strong></td>
+                </tr>
+              }
+              @if (!previewData.data.ventas.length) {
+                <tr><td colspan="5" class="empty-cell">Sin ventas</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <p class="completo-hint">
+          Descarga el <strong>PDF</strong> o <strong>Excel</strong> para ver el informe completo con todos los módulos.
+        </p>
+      }
+
+    </div><!-- /preview-panel -->
+  </div><!-- /rep-main -->
+</div>

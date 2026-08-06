@@ -1,0 +1,70 @@
+
+        <!-- Barra de completitud -->
+        <div class="granja-completitud-wrap">
+          <div class="granja-completitud-label">Completitud del perfil</div>
+          <div class="granja-completitud-bar-bg">
+            <div class="granja-completitud-bar-fill" [style.width]="svc.granjaCompleta() + '%'"></div>
+          </div>
+          <span class="granja-completitud-pct">{{ svc.granjaCompleta() }}%</span>
+        </div>
+
+        <div class="sub-card">
+          <div class="sub-card-title">Datos de la granja</div>
+          <p class="cfg-helper">Esta informacion aparece en los encabezados de los reportes generados en PDF y Excel.</p>
+          <div class="cfg-form-grid" style="margin-top:14px">
+            <div class="input-group">
+              <label class="input-label">Nombre *</label>
+              <input class="input-field" [(ngModel)]="svc.granja.nombre" placeholder="Zona Avicola SENA">
+            </div>
+            <div class="input-group">
+              <label class="input-label">NIT</label>
+              <input class="input-field" [(ngModel)]="svc.granja.nit" placeholder="900.123.456-7">
+            </div>
+            <div class="input-group">
+              <label class="input-label">Direccion</label>
+              <input class="input-field" [(ngModel)]="svc.granja.direccion" placeholder="Vereda El Porvenir Km 5">
+            </div>
+            <div class="input-group">
+              <label class="input-label">Ciudad</label>
+              <input class="input-field" [(ngModel)]="svc.granja.ciudad" placeholder="Bogota, Cundinamarca">
+            </div>
+            <div class="input-group">
+              <label class="input-label">Telefono</label>
+              <input class="input-field" [(ngModel)]="svc.granja.telefono" placeholder="+57 300 123 4567">
+            </div>
+            <div class="input-group">
+              <label class="input-label">Correo electronico</label>
+              <input class="input-field" type="email" [(ngModel)]="svc.granja.email" placeholder="contacto&#64;sena.edu.co">
+            </div>
+          </div>
+          <div class="input-group" style="margin-top:10px">
+            <label class="input-label">Descripcion</label>
+            <textarea class="input-field" [(ngModel)]="svc.granja.descripcion" rows="3"
+              placeholder="Descripcion breve de la svc.granja..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" (click)="svc.guardarGranja()">
+              {{ svc.granjaGuardada ? '✓ Guardado' : 'Guardar' }}
+            </button>
+            <button class="btn btn-secondary" (click)="svc.granja = svc.granjaDefault()">Restaurar</button>
+          </div>
+        </div>
+
+        <div class="sub-stats-bar">
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.granja.nombre || '—' }}</span>
+            <span class="sub-stat-l">Nombre</span>
+          </div>
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.granja.ciudad || '—' }}</span>
+            <span class="sub-stat-l">Ciudad</span>
+          </div>
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.granja.nit || '—' }}</span>
+            <span class="sub-stat-l">NIT</span>
+          </div>
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.granjaCompleta() }}%</span>
+            <span class="sub-stat-l">Completitud</span>
+          </div>
+        </div>

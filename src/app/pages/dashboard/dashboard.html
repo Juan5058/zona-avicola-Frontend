@@ -1,0 +1,321 @@
+<!-- dashboard -->
+<div class="dash-body">
+
+  <!-- carrusel infinito -->
+  <div class="carousel-block">
+    <div class="carousel-wrap" (mouseenter)="hoverCarousel=true" (mouseleave)="hoverCarousel=false">
+      <button class="car-arrow" (click)="prev()">&#8249;</button>
+      <div class="carousel-viewport">
+        <div class="car-track"
+             [style.transform]="trackOffset()"
+             [style.transition]="transitioning ? 'transform 0.4s cubic-bezier(0.4,0,0.2,1)' : 'none'">
+          @for (c of trackCards; track $index; let i = $index) {
+            <div class="stat-card"
+                 [ngStyle]="getCardStyle(c)"
+                 [style.width.px]="cardW"
+                 [style.flex]="'0 0 ' + cardW + 'px'">
+              <span class="card-badge">{{c.badge}}</span>
+              <div class="big-num">{{c.num}}</div>
+              <div class="card-title">{{c.title}}</div>
+              <div class="card-sub">{{c.sub}}</div>
+              @if (c.trend && c.trend.pct > 0) {
+                <div class="card-trend" [class.trend-up]="c.trend.dir === 'up'" [class.trend-down]="c.trend.dir === 'down'">
+                  {{ c.trend.dir === 'up' ? '▲' : '▼' }} {{ c.trend.pct }}%
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+      <button class="car-arrow" (click)="next()">&#8250;</button>
+    </div>
+    <div class="car-dots">
+      @for (d of dots; track $index) {
+        <span class="car-dot" [class.active]="$index === dotActivo" (click)="irA($index)"></span>
+      }
+    </div>
+  </div>
+
+  <!-- filtros de periodo + ultima actualizacion -->
+  <div class="filter-bar">
+    <div class="period-btns">
+      <button class="period-btn" [class.active]="periodoActivo === 'semana'" (click)="setPeriod('semana')">Semana</button>
+      <button class="period-btn" [class.active]="periodoActivo === 'mes'"    (click)="setPeriod('mes')">Mes</button>
+      <button class="period-btn" [class.active]="periodoActivo === 'año'"    (click)="setPeriod('año')">Año</button>
+    </div>
+    <div class="date-range">
+      <input type="date" class="input-field" [(ngModel)]="fechaIni" (change)="cargarDashboard()">
+      <span>—</span>
+      <input type="date" class="input-field" [(ngModel)]="fechaFin" (change)="cargarDashboard()">
+    </div>
+    <div class="refresh-wrap">
+      @if (ultimaActualizacion) {
+        <span class="ultima-act">Actualizado: {{ fmtHora(ultimaActualizacion) }}</span>
+      }
+      <button class="btn-refresh" (click)="refrescar()" [class.girando]="refrescando" title="Actualizar datos">&#8635;</button>
+    </div>
+  </div>
+
+  <!-- resumen textual -->
+  @if (resumen.length > 0) {
+    <div class="resumen-bar">
+      @for (r of resumenVisible; track r.texto) {
+        <div class="resumen-item" [class.positivo]="r.tipo === 'positivo'" [class.negativo]="r.tipo === 'negativo'" [class.neutro]="r.tipo === 'neutro'">
+          <span class="resumen-icon">
+            @if (r.tipo === 'positivo') {
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 13 9.5 18.5 20 6"/>
+              </svg>
+            } @else if (r.tipo === 'negativo') {
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9.2"/>
+                <line x1="12" y1="7.4" x2="12" y2="13"/>
+                <circle cx="12" cy="16.3" r="0.6" fill="currentColor" stroke="none"/>
+              </svg>
+            } @else {
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9.2"/>
+                <line x1="12" y1="11" x2="12" y2="16.3"/>
+                <circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none"/>
+              </svg>
+            }
+          </span>
+          <span class="resumen-texto">{{ r.texto }}</span>
+        </div>
+      }
+      @if (resumen.length > resumenLimite) {
+        <button class="resumen-toggle" (click)="toggleResumen()">
+          {{ resumenExpandido ? 'Ver menos' : '+' + (resumen.length - resumenLimite) + ' mas' }}
+        </button>
+      }
+    </div>
+  }
+
+  <!-- prioridad 1: produccion y rendimiento -->
+  <div class="charts-grid">
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Produccion de Huevos</div>
+        <div class="chart-subtitle">{{ periodoActivo | titlecase }}</div>
+      </div>
+      @if (barData.length === 0 || barData.every(b => b.val === 0)) {
+        <div class="chart-empty"><p>Sin datos en el periodo</p></div>
+      } @else {
+        <div class="bar-chart">
+          @for (b of barData; track b.label) {
+            <div class="bar-col">
+              <div class="bar-val">{{b.val > 0 ? fmtNum(b.val) : ''}}</div>
+              <div class="bar" [style.height]="b.pct + '%'" [title]="b.label + ': ' + fmtNum(b.val)"></div>
+              <div class="bar-label">{{b.label}}</div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Top Lotes Productivos</div>
+        <div class="chart-subtitle">{{ lotesActivos.length }} lotes activos</div>
+      </div>
+      @if (productividadLotes.length === 0) {
+        <div class="chart-empty"><p>Sin lotes registrados</p></div>
+      } @else {
+        <div class="lotes-list">
+          @for (l of productividadLotes; track l.codigo; let i = $index) {
+            <div class="lote-item" [class.lote-top]="i === 0">
+              <span class="lote-rank" [class.rank-top]="i === 0">{{ i + 1 }}</span>
+              <div class="lote-left">
+                <div class="lote-codigo">{{ l.codigo }}</div>
+                <div class="lote-raza">{{ l.raza }} &bull; {{ fmtNum(l.cantidad) }} aves</div>
+              </div>
+              <div class="lote-right">
+                <div class="lote-pct" [style.color]="getTarifColor(l.tasa)">{{ l.tasa }}%</div>
+                <div class="prod-bar-wrap">
+                  <div class="prod-bar" [style.width]="l.tasa + '%'" [style.background]="getTarifColor(l.tasa)"></div>
+                </div>
+                <div class="lote-huevos">{{ fmtNum(l.huevosPeriodo) }} huevos</div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Distribucion por Calidad</div>
+        <div class="chart-subtitle">{{ fmtNum(donutTotal) }} clasificados</div>
+      </div>
+      @if (donutTotal === 0) {
+        <div class="chart-empty"><p>Sin clasificaciones en el periodo</p></div>
+      } @else {
+        <div class="donut-wrap">
+          <svg viewBox="0 0 36 36" class="donut-svg">
+            @for (s of donutSegments; track s.label) {
+              <circle class="donut-segment" cx="18" cy="18" r="15.915" fill="none"
+                [attr.stroke]="s.color" stroke-width="3.5"
+                [attr.stroke-dasharray]="s.pct + ' ' + (100 - s.pct)"
+                [attr.stroke-dashoffset]="100 - s.offset + 25"
+                transform="rotate(-90 18 18)" />
+            }
+            <text x="18" y="20" text-anchor="middle" class="donut-center">{{fmtNum(donutTotal)}}</text>
+          </svg>
+          <div class="donut-legend">
+            @for (s of donutSegments; track s.label) {
+              <div class="legend-item">
+                <span class="legend-dot" [style.background]="s.color"></span>
+                <span class="legend-label">{{s.label}}</span>
+                <span class="legend-val">{{s.pct.toFixed(1)}}%</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+  </div>
+
+  <!-- prioridad 2: inventario y alimento (stock + consumo en una sola tarjeta) -->
+  <div class="chart-card chart-card-wide">
+    <div class="chart-header">
+      <div class="chart-title">Inventario y Alimento</div>
+      <div class="chart-subtitle">Stock y consumo del periodo</div>
+    </div>
+    <div class="inv-combo">
+
+      <div class="inv-combo-col">
+        <div class="inv-combo-label">Estado del stock</div>
+        @if (inventarioItems.filter(i => i.estado !== 'ok').length === 0) {
+          <div class="inv-ok">
+            <div class="ok-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 13 9.5 18.5 20 6"/>
+              </svg>
+            </div>
+            <p>Todo el inventario en niveles normales</p>
+          </div>
+        } @else {
+          <div class="inv-stock-list">
+            @for (i of inventarioItems; track i.nombre) {
+              @if (i.estado !== 'ok') {
+                <div class="alerta-item" [class.alerta-critica]="i.estado === 'critico'" [class.alerta-baja]="i.estado === 'bajo'">
+                  <div class="alerta-dot" [class.dot-critico]="i.estado === 'critico'" [class.dot-bajo]="i.estado === 'bajo'"></div>
+                  <div class="alerta-texto">
+                    <strong>{{ i.nombre }}</strong>
+                    <span>{{ fmtNum(i.stock) }} / min {{ fmtNum(i.minimo) }}</span>
+                  </div>
+                  <span class="alerta-badge" [class.badge-red]="i.estado === 'critico'" [class.badge-orange]="i.estado === 'bajo'">
+                    {{ i.estado === 'critico' ? 'Critico' : 'Bajo' }}
+                  </span>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+
+      <div class="inv-combo-sep"></div>
+
+      <div class="inv-combo-col">
+        <div class="inv-combo-label">Consumo del periodo</div>
+        @if (consumoPorItem.length === 0) {
+          <div class="inv-ok"><p>Sin consumo registrado en el periodo</p></div>
+        } @else {
+          <div class="inv-consumo-list">
+            @if (consumoPorItem.some(c => c.grupo === 'alimento')) {
+              <div class="inv-consumo-grupo-titulo">Alimento</div>
+              @for (c of consumoPorItem; track c.nombre) {
+                @if (c.grupo === 'alimento') {
+                  <div class="inv-consumo-item">
+                    <div class="inv-consumo-top">
+                      <span class="inv-consumo-nombre">{{ c.nombre }}</span>
+                      <span class="inv-consumo-kg">{{ fmtNum(c.kg) }} {{ c.unidad || 'kg' }}</span>
+                    </div>
+                    <div class="inv-consumo-bar-wrap">
+                      <div class="inv-consumo-bar" [style.width]="c.pct + '%'"></div>
+                    </div>
+                  </div>
+                }
+              }
+            }
+            @if (consumoPorItem.some(c => c.grupo === 'inventario')) {
+              <div class="inv-consumo-grupo-titulo">Insumos / Inventario</div>
+              @for (c of consumoPorItem; track c.nombre) {
+                @if (c.grupo === 'inventario') {
+                  <div class="inv-consumo-item">
+                    <div class="inv-consumo-top">
+                      <span class="inv-consumo-nombre">{{ c.nombre }}</span>
+                      <span class="inv-consumo-kg">{{ fmtNum(c.kg) }} {{ c.unidad || 'u' }}</span>
+                    </div>
+                    <div class="inv-consumo-bar-wrap">
+                      <div class="inv-consumo-bar inv-consumo-bar-insumo" [style.width]="c.pct + '%'"></div>
+                    </div>
+                  </div>
+                }
+              }
+            }
+          </div>
+        }
+      </div>
+
+    </div>
+  </div>
+
+  <!-- prioridad 3 y 4: finanzas y salud, vista compacta para no saturar -->
+  <div class="resumen-rapido">
+
+    <div class="rr-chip rr-finanzas">
+      <span class="rr-icon">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23"/>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+      </span>
+      <div class="rr-info">
+        <div class="rr-val">{{ fmtMoney(ingresosPeriodo) }}</div>
+        <div class="rr-lbl">Ingresos &bull; {{ numVentasPeriodo }} ventas</div>
+      </div>
+    </div>
+
+    <div class="rr-chip rr-mortalidad">
+      <span class="rr-icon">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/>
+          <polyline points="16 17 22 17 22 11"/>
+        </svg>
+      </span>
+      <div class="rr-info">
+        <div class="rr-val">{{ cards[3].num }} bajas</div>
+        <div class="rr-lbl">{{ tasaMortDisplay }}% del total de aves</div>
+      </div>
+      @if (miniSparkMort.length > 0) {
+        <div class="rr-spark">
+          @for (m of miniSparkMort; track $index) {
+            <span class="rr-spark-bar" [style.height.%]="m.pct"></span>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="rr-chip rr-tratamiento">
+      <span class="rr-icon">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/>
+          <path d="m8.5 8.5 7 7"/>
+        </svg>
+      </span>
+      <div class="rr-info">
+        @if (tratamientosProximos.length > 0) {
+          <div class="rr-val">{{ tratamientosProximos[0].medicamento || tratamientosProximos[0].nombre || 'Tratamiento' }}</div>
+          <div class="rr-lbl">En {{ diasPara(tratamientosProximos[0].fecha_aplicacion || tratamientosProximos[0].fecha) }} dias &bull; {{ tratamientosProximos.length }} en los proximos 30</div>
+        } @else {
+          <div class="rr-val">Sin tratamientos pendientes</div>
+          <div class="rr-lbl">Nada programado en 30 dias</div>
+        }
+      </div>
+    </div>
+
+  </div>
+</div>

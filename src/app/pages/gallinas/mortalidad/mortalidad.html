@@ -1,0 +1,140 @@
+<div class="tab-panel">
+  <div class="two-col-layout">
+
+    <!-- Formulario mortalidad -->
+    <div class="form-section">
+      <div class="form-section-title">{{ svc.mortFormTitle }}</div>
+
+      <div class="input-group">
+        <label class="input-label">Lote</label>
+        <select class="input-field" [(ngModel)]="svc.mortForm.lote_id">
+          <option value="">Seleccionar lote...</option>
+          @for (l of svc.lotes; track l._id) {
+          <option [value]="l._id">{{ l.id }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="two-col-form">
+        <div class="input-group">
+          <label class="input-label">Fecha</label>
+          <input class="input-field" type="date" [(ngModel)]="svc.mortForm.fecha">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Cantidad *</label>
+          <input class="input-field" type="number" [(ngModel)]="svc.mortForm.cant" placeholder="0">
+        </div>
+      </div>
+
+      <!-- Causa: selector con opción de agregar -->
+      <div class="input-group">
+        <label class="input-label">
+          Causa *
+          <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('causasMort','Causa')" title="Agregar causa">+</button>
+        </label>
+        <select class="input-field" [(ngModel)]="svc.mortForm.causa_id">
+          <option value="">Seleccionar...</option>
+          @for (c of svc.causasMortalidad; track c.id_causa) {
+          <option [value]="c.id_causa">{{ c.nombre }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label">Observaciones</label>
+        <textarea class="input-field" [(ngModel)]="svc.mortForm.obs" rows="2"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" (click)="svc.guardarMort()" [disabled]="!svc.puedeGuardar(svc.editingMortId)">Guardar</button>
+        <button class="btn btn-secondary"
+          (click)="svc.mortForm=svc.newMortForm();svc.editingMortId=null;svc.mortFormTitle='Registrar Mortalidad'">Limpiar</button>
+      </div>
+    </div>
+
+    <!-- Tabla mortalidad -->
+    <div class="list-section">
+
+      <!-- Encabezado -->
+      <div class="section-header-block">
+        <div class="section-header-left">
+          <span class="section-main-title">Registros de Mortalidad</span>
+          @if (svc.mortTotal > 0) {
+            <span class="section-kpi danger">&#128308; Total bajas: <strong>{{ svc.mortTotal }} aves</strong></span>
+          }
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label class="filter-label">Mes</label>
+          <input class="input-field" type="month" [(ngModel)]="svc.mortFiltroFecha" (change)="svc.filterMorts()">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Causa</label>
+          <select class="input-field" [(ngModel)]="svc.mortFiltroCausa" (change)="svc.filterMorts()">
+            <option value="">Todas</option>
+            @for (c of svc.causasMortalidad; track c.id_causa) { <option [value]="c.nombre">{{ c.nombre }}</option> }
+          </select>
+        </div>
+        <div class="per-page-group">
+          <label class="filter-label">Por pág:</label>
+          <div class="per-page-row">
+            <select class="per-page-select" [value]="svc.mortPageSize" (change)="svc.onChange_mortSize($event)">
+              <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+            </select>
+            <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize('mort', $event)">
+          </div>
+        </div>
+        <button class="btn-limpiar" (click)="svc.mortFiltroFecha='';svc.mortFiltroCausa='';svc.filterMorts()"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Lote</th>
+            <th>Cantidad</th>
+            <th>Causa</th>
+            <th>Acc.</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (svc.mortsFiltered.length === 0) {
+          <tr>
+            <td colspan="5" class="empty-cell">Sin registros.</td>
+          </tr>
+          }
+          @for (r of svc.mortsPage; track r._id) {
+          <tr>
+            <td>{{ svc.fmtDate(r.fecha) }}</td>
+            <td><span class="badge badge-green">{{ r.lote }}</span></td>
+            <td><strong class="text-danger">{{ r.cant }}</strong></td>
+            <td>{{ r.causa }}</td>
+            <td class="td-actions">
+              <button class="btn btn-secondary btn-sm" (click)="svc.editMort(r)" [disabled]="!svc.puedeEditarModulo">Editar</button>
+              <button class="btn btn-danger btn-sm" (click)="svc.elimMort(r)" [disabled]="!svc.puedeEliminar">Eliminar</button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="za-pag-bar">
+        <span class="za-pag-info">{{ svc.mortsFiltered.length }} registros</span>
+        @if (svc.totalPagMorts > 1) {
+        <div class="za-pagination">
+          <button class="za-page-btn" (click)="svc.mortPage=svc.mortPage-1" [disabled]="svc.mortPage===1">&#8249;</button>
+          @for (p of svc.pagesVisibles(svc.totalPagMorts, svc.mortPage); track p) {
+            @if (p === -1) { <span class="za-page-dots">…</span> }
+            @else { <button class="za-page-btn" [class.za-active]="svc.mortPage===p" (click)="svc.mortPage=p">{{ p }}</button> }
+          }
+          <button class="za-page-btn" (click)="svc.mortPage=svc.mortPage+1" [disabled]="svc.mortPage===svc.totalPagMorts">&#8250;</button>
+        </div>
+        }
+      </div>
+    </div>
+
+  </div>
+</div>

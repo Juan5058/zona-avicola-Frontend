@@ -1,0 +1,166 @@
+<div class="tab-panel">
+  <div class="two-col-layout">
+
+    <!-- Formulario lote -->
+    <div class="form-section">
+      <div class="form-section-title">{{ svc.loteFormTitle }}</div>
+
+      <div class="input-group">
+        <label class="input-label">ID del Lote *</label>
+        <input class="input-field" [(ngModel)]="svc.loteForm.id" placeholder="Ej: L-2025-01" [disabled]="!!svc.editingLoteId">
+      </div>
+
+      <div class="two-col-form">
+        <!-- Raza: selector con opción de agregar -->
+        <div class="input-group">
+          <label class="input-label">
+            Raza *
+            <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('razas','Raza')" title="Agregar raza">+</button>
+          </label>
+          <select class="input-field" [(ngModel)]="svc.loteForm.raza">
+            <option value="">Seleccionar...</option>
+            @for (o of svc.opciones.razas; track o) {
+            <option [value]="o">{{ o }}</option>
+            }
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label">Cantidad *</label>
+          <input class="input-field" type="number" [(ngModel)]="svc.loteForm.cant" placeholder="0">
+        </div>
+      </div>
+
+      <div class="two-col-form">
+        <div class="input-group">
+          <label class="input-label">Fecha</label>
+          <input class="input-field" type="date" [(ngModel)]="svc.loteForm.fecha">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Edad (semanas)</label>
+          <input class="input-field" type="number" [(ngModel)]="svc.loteForm.edad" placeholder="0">
+        </div>
+      </div>
+
+      <!-- Galpón: selector con opción de agregar -->
+      <div class="input-group">
+        <label class="input-label">
+          Galpón
+          <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('galpones','Galpón')" title="Agregar galpón">+</button>
+        </label>
+        <select class="input-field" [(ngModel)]="svc.loteForm.galpon">
+          <option value="">Seleccionar...</option>
+          @for (o of svc.opciones.galpones; track o) {
+          <option [value]="o">{{ o }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Estado: selector con opción de agregar -->
+      <div class="input-group">
+        <label class="input-label">
+          Estado
+          <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('estadosLote','Estado')"
+            title="Agregar estado">+</button>
+        </label>
+        <select class="input-field" [(ngModel)]="svc.loteForm.estado">
+          @for (o of svc.opciones.estadosLote; track o) {
+          <option [value]="o">{{ o }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label">Observaciones</label>
+        <textarea class="input-field" [(ngModel)]="svc.loteForm.obs" rows="2"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" (click)="svc.guardarLote()" [disabled]="!svc.puedeGuardar(svc.editingLoteId)">Guardar</button>
+        <button class="btn btn-secondary"
+          (click)="svc.loteForm=svc.newLoteForm();svc.editingLoteId=null;svc.loteFormTitle='Registrar Lote'">Limpiar</button>
+      </div>
+    </div>
+
+    <!-- Tabla lotes -->
+    <div class="list-section">
+      <div class="section-header-block">
+        <div class="section-header-left">
+          <span class="section-main-title">Lotes Registrados</span>
+        </div>
+      </div>
+      <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Buscar</label>
+    <input class="input-field" [(ngModel)]="svc.loteSearch" (input)="svc.filterLotes()" placeholder="Lote, raza o galpón...">
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.lotePageSize" (change)="svc.onChange_loteSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize('lote', $event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.loteSearch=''"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Raza</th>
+            <th>Cant.</th>
+            <th>Vivas</th>
+            <th>Galpón</th>
+            <th>Estado</th>
+            <th>Acc.</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (svc.lotesFiltered.length === 0) {
+          <tr>
+            <td colspan="7" class="empty-cell">Sin lotes registrados.</td>
+          </tr>
+          }
+          @for (r of svc.lotesPage; track r._id) {
+          <tr>
+            <td><strong>{{ r.id }}</strong></td>
+            <td>{{ r.raza }}</td>
+            <td>{{ svc.fmtNum(r.cant) }}</td>
+            <td><span class="aves-vivas">{{ svc.fmtNum(svc.avesVivas(r)) }}</span></td>
+            <td>{{ r.galpon }}</td>
+            <td>
+              <span class="badge" [class.badge-green]="r.estado==='Activo'"
+                [class.badge-orange]="r.estado==='En cuarentena'"
+                [class.badge-gray]="r.estado!=='Activo' && r.estado!=='En cuarentena'">
+                {{ r.estado }}
+              </span>
+            </td>
+            <!-- Acciones: editar y eliminar -->
+            <td class="td-actions">
+              <button class="btn btn-secondary btn-sm" (click)="svc.editLote(r)" [disabled]="!svc.puedeEditarModulo">Editar</button>
+              <button class="btn btn-danger btn-sm" (click)="svc.elimLote(r)" [disabled]="!svc.puedeEliminar">Eliminar</button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="za-pag-bar">
+        <span class="za-pag-info">{{ svc.lotesFiltered.length }} lotes</span>
+        @if (svc.totalPagLotes > 1) {
+        <div class="za-pagination">
+          <button class="za-page-btn" (click)="svc.lotePage=svc.lotePage-1" [disabled]="svc.lotePage===1">&#8249;</button>
+          @for (p of svc.pagesVisibles(svc.totalPagLotes, svc.lotePage); track p) {
+            @if (p === -1) { <span class="za-page-dots">…</span> }
+            @else { <button class="za-page-btn" [class.za-active]="svc.lotePage===p" (click)="svc.lotePage=p">{{ p }}</button> }
+          }
+          <button class="za-page-btn" (click)="svc.lotePage=svc.lotePage+1" [disabled]="svc.lotePage===svc.totalPagLotes">&#8250;</button>
+        </div>
+        }
+      </div>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,186 @@
+
+        <div class="section-header-block">
+          <div class="section-header-left">
+            <span class="section-main-title">Auditoria del sistema</span>
+          </div>
+        </div>
+        <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Modulo</label>
+    <select class="input-field" [(ngModel)]="svc.audFiltros.modulo" (change)="svc.filterAud()">
+              <option value="">Todos</option>
+              @for (m of svc.audModulos; track m) { <option [value]="m">{{ m }}</option> }
+            </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Accion</label>
+    <select class="input-field" [(ngModel)]="svc.audFiltros.accion" (change)="svc.filterAud()">
+              <option value="">Todas</option>
+              @for (a of svc.audAcciones; track a) { <option [value]="a">{{ a }}</option> }
+            </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Usuario</label>
+    <input class="input-field" [(ngModel)]="svc.audFiltros.usuario" (input)="svc.filterAud()" placeholder="Buscar...">
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Desde</label>
+    <input class="input-field" type="date" [(ngModel)]="svc.audFiltros.desde" (change)="svc.filterAud()">
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Hasta</label>
+    <input class="input-field" type="date" [(ngModel)]="svc.audFiltros.hasta" (change)="svc.filterAud()">
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.audPageSize" (change)="svc.onChangeAudSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSizeAud($event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.limpiarAud()"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+
+        <div class="sub-card">
+          @if (svc.loadingAud) {
+            <div class="td-empty">Cargando registros de auditoria...</div>
+          }
+          @if (!svc.loadingAud && svc.audFiltradas.length === 0) {
+            <div class="td-empty">Sin registros con los filtros aplicados</div>
+          }
+          @if (!svc.loadingAud && svc.audFiltradas.length > 0) {
+            <div style="overflow-x:auto">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Fecha</th>
+                    <th>Usuario</th>
+                    <th>Rol</th>
+                    <th>Modulo</th>
+                    <th>Accion</th>
+                    <th>Descripcion</th>
+                    <th>Detalle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of svc.audPage_data; track r.id_auditoria) {
+                    <tr>
+                      <td class="td-id">{{ r.id_auditoria }}</td>
+                      <td class="td-fecha">{{ svc.fmtDateTime(r.fecha) }}</td>
+                      <td><span class="user-chip-sm">{{ r.usuario?.nombre_usuario || '—' }}</span></td>
+                      <td><span class="badge" [ngClass]="svc.rolClass(r.rol?.nombre)">{{ r.rol?.nombre || '—' }}</span></td>
+                      <td><span class="mod-chip">{{ r.modulo }}</span></td>
+                      <td><span class="badge" [ngClass]="svc.accionClass(r.accion)">{{ r.accion }}</span></td>
+                      <td class="td-desc">{{ r.descripcion }}</td>
+                      <td>
+                        @if (r.detalle) {
+                          <button class="btn btn-secondary btn-sm" (click)="svc.verDetalleAud(r)">Ver</button>
+                        } @else {
+                          <span class="td-null">—</span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <div class="za-pag-bar">
+              <span class="za-pag-info">{{ svc.audFiltradas.length }} registros</span>
+              @if (svc.totalPagAud > 1) {
+              <div class="za-pagination">
+                <button class="za-page-btn" (click)="svc.audPage=svc.audPage-1" [disabled]="svc.audPage===1">&lsaquo;</button>
+                @for (p of svc.pagesVisibles(svc.totalPagAud, svc.audPage); track p) {
+                  @if (p === -1) { <span class="za-page-dots">…</span> }
+                  @else { <button class="za-page-btn" [class.za-active]="svc.audPage===p" (click)="svc.audPage=p">{{ p }}</button> }
+                }
+                <button class="za-page-btn" (click)="svc.audPage=svc.audPage+1" [disabled]="svc.audPage===svc.totalPagAud">&rsaquo;</button>
+              </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="sub-stats-bar">
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.audRegistros.length }}</span>
+            <span class="sub-stat-l">Total</span>
+          </div>
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.audFiltradas.length }}</span>
+            <span class="sub-stat-l">Filtrados</span>
+          </div>
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.audModulos.length }}</span>
+            <span class="sub-stat-l">Modulos</span>
+          </div>
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.audAcciones.length }}</span>
+            <span class="sub-stat-l">Acciones</span>
+          </div>
+        </div>
+
+        <!-- ══════════ MODAL DETALLE DE AUDITORIA ══════════ -->
+        <div class="modal-overlay" [class.show]="svc.audModalOpen" (click)="svc.audModalOpen=false">
+          <div class="modal-box modal-lg" (click)="$event.stopPropagation()">
+            <div class="modal-title">Detalle de auditoria</div>
+            <div class="aud-modal-meta">
+              <span>{{ svc.fmtDateTime(svc.audSelected?.fecha) }}</span>
+              <span>&middot;</span>
+              <span>{{ svc.audSelected?.usuario?.nombre_usuario || '—' }}</span>
+              <span>&middot;</span>
+              <span class="mod-chip">{{ svc.audSelected?.modulo }}</span>
+              <span class="badge" [ngClass]="svc.accionClass(svc.audSelected?.accion)">{{ svc.audSelected?.accion }}</span>
+            </div>
+            <div class="modal-desc">{{ svc.audSelected?.descripcion }}</div>
+
+            @if (svc.audTieneDiff()) {
+              <div class="diff-grid">
+                <div class="diff-col">
+                  <div class="diff-title diff-antes">Antes</div>
+                  <div class="diff-body">
+                    @for (k of svc.getKeys(svc.audSelected?.detalle?.antes); track k) {
+                      <div class="diff-row" [class.changed]="svc.hasChanged(k)">
+                        <span class="diff-key">{{ k }}</span>
+                        <span class="diff-val antes-val">{{ svc.fmt(svc.audSelected?.detalle?.antes?.[k]) }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+                <div class="diff-col">
+                  <div class="diff-title diff-despues">Despues</div>
+                  <div class="diff-body">
+                    @for (k of svc.getKeys(svc.audSelected?.detalle?.despues); track k) {
+                      <div class="diff-row" [class.changed]="svc.hasChanged(k)">
+                        <span class="diff-key">{{ k }}</span>
+                        <span class="diff-val despues-val">{{ svc.fmt(svc.audSelected?.detalle?.despues?.[k]) }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+
+            @if (svc.audTieneDatos()) {
+              <div class="diff-grid">
+                <div class="diff-col full-col">
+                  <div class="diff-title">Datos</div>
+                  <div class="diff-body">
+                    @for (k of svc.getKeys(svc.audSelected?.detalle); track k) {
+                      <div class="diff-row">
+                        <span class="diff-key">{{ k }}</span>
+                        <span class="diff-val">{{ svc.fmt(svc.audSelected?.detalle?.[k]) }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+
+            <div class="modal-footer">
+              <button class="btn btn-secondary" (click)="svc.audModalOpen=false">Cerrar</button>
+            </div>
+          </div>
+        </div>

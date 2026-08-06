@@ -1,0 +1,161 @@
+<header class="page-header">
+
+  <div class="header-left">
+    <div class="header-title">
+      <h1>Zona <span>Avícola</span></h1>
+      <p>{{ fechaHora }}</p>
+    </div>
+  </div>
+
+  <div class="header-right">
+
+    <!-- ── Campana ──────────────────────────────── -->
+    <button class="notif-btn" (click)="toggleNotif($event)" title="Notificaciones">
+      <span [innerHTML]="svgBell"></span>
+      <span class="notif-badge" *ngIf="noLeidas > 0">{{ noLeidas > 99 ? '99+' : noLeidas }}</span>
+      <span class="notif-poll-dot"></span>
+    </button>
+
+    <!-- Dropdown notificaciones -->
+    <div class="notif-dropdown" [class.show]="notifOpen" (click)="$event.stopPropagation()">
+      <div class="notif-header">
+        <div class="notif-header-title">
+          <span [innerHTML]="svgBell" class="notif-title-icon"></span> Notificaciones
+          <span class="notif-unread-chip" *ngIf="noLeidas > 0">{{ noLeidas }}</span>
+        </div>
+        <div class="notif-header-actions" *ngIf="puedeGestionarNotifs">
+          <button class="notif-action-btn" (click)="leerTodas()" [disabled]="noLeidas === 0">
+            <span [innerHTML]="svgCheck"></span> Leer todas
+          </button>
+          <button class="notif-action-btn danger" (click)="borrarTodasLeidas()" [disabled]="leidasCount === 0">
+            <span [innerHTML]="svgTrash"></span> Limpiar
+          </button>
+        </div>
+      </div>
+      <div class="notif-tabs">
+        <button class="notif-tab" [class.active]="tabActivo==='todas'" (click)="tabActivo='todas'">
+          Todas ({{ notifs.length }})
+        </button>
+        <button class="notif-tab" [class.active]="tabActivo==='noLeidas'" (click)="tabActivo='noLeidas'">
+          Sin leer ({{ noLeidas }})
+        </button>
+      </div>
+      <div class="notif-list">
+        <div *ngIf="loadingNotifs" class="notif-empty">
+          <span [innerHTML]="svgEmpty"></span> Cargando...
+        </div>
+        <div *ngIf="!loadingNotifs && notifsVisibles.length === 0" class="notif-empty">
+          <span [innerHTML]="svgEmpty"></span>
+          {{ tabActivo === 'noLeidas' ? 'Todo al dia ✓' : 'Sin notificaciones' }}
+        </div>
+        <div *ngFor="let n of notifsVisibles" class="notif-item"
+          [class.unread]="!n.leida" [class.leida]="n.leida" (click)="leerNotif(n)">
+          <div class="ni-icon-wrap" [ngClass]="tipoClass(n.tipo)" [innerHTML]="notifSvg(n.tipo)"></div>
+          <div class="ni-body">
+            <div class="ni-title">{{ n.titulo }}</div>
+            <div class="ni-msg">{{ n.mensaje }}</div>
+            <div class="ni-meta">
+              <ng-container *ngIf="n.modulo">
+                <span [innerHTML]="svgFolder"></span> {{ n.modulo }} &middot;
+              </ng-container>
+              {{ fmtTime(n.fecha) }}
+            </div>
+          </div>
+          <div class="ni-controls">
+            <span *ngIf="!n.leida" class="ni-unread-dot"></span>
+            <button *ngIf="puedeGestionarNotifs" class="ni-delete-btn" [class.locked]="!n.leida"
+              [title]="n.leida ? 'Eliminar' : 'Marcala como leida primero'"
+              (click)="eliminarNotif($event, n)">&#x2715;</button>
+          </div>
+        </div>
+      </div>
+      <div class="notif-footer" *ngIf="!loadingNotifs && notifs.length > 0 && puedeGestionarNotifs">
+        <span class="notif-footer-hint">Clic para marcar como leida · luego podras eliminarla</span>
+      </div>
+    </div>
+
+    <!-- ── Chip de usuario ──────────────────────── -->
+    <div class="user-chip" [class.clickable]="isAdmin" (click)="isAdmin && toggleProfile($event)">
+      <div class="user-avatar" [innerHTML]="rolSvg"></div>
+      <div class="user-info">
+        <div class="uname">{{ session?.nombre }}</div>
+        <div class="urole">{{ rolLabel }}</div>
+      </div>
+    </div>
+
+    <!-- ── Dropdown permisos (solo admin) ──────── -->
+    <div class="profile-dropdown" [class.show]="profileOpen" (click)="$event.stopPropagation()">
+
+      <!-- Cabecera -->
+      <div class="pf-header">
+        <div class="pf-avatar" [innerHTML]="rolSvg"></div>
+        <div class="pf-info">
+          <div class="pf-nombre">{{ session?.nombre }}</div>
+          <div class="pf-rol">{{ rolLabel }}</div>
+        </div>
+      </div>
+
+      <!-- Sección: Rol a configurar -->
+      <div class="pf-section">
+        <div class="pf-section-title">Configurar permisos de</div>
+        <div class="pf-modulos-tabs">
+          <button class="pf-mod-tab" [class.active]="modRolActivo==='operador'"
+            (click)="modRolActivo='operador'">Operador</button>
+          <button class="pf-mod-tab" [class.active]="modRolActivo==='visitante'"
+            (click)="modRolActivo='visitante'">Visitante</button>
+        </div>
+      </div>
+
+      <div *ngIf="loadingPermisos" class="pf-section">
+        <div class="pf-estado-msg">Cargando permisos...</div>
+      </div>
+      <div *ngIf="!loadingPermisos && errorPermisos" class="pf-section">
+        <div class="pf-estado-msg error">No se pudieron cargar los permisos. Intenta de nuevo.</div>
+      </div>
+
+      <ng-container *ngIf="!loadingPermisos && !errorPermisos">
+        <!-- Sección: Módulo del que se editan las acciones -->
+        <div class="pf-section">
+          <div class="pf-section-title">Módulo</div>
+          <div class="pf-modulos-grid">
+            @for (mod of modulosCrud; track mod) {
+              <div class="pf-mod-chip" [class.active]="moduloActivo===mod"
+                   (click)="moduloActivo=mod">
+                <span class="pf-mod-icon" [innerHTML]="modIcon(mod)"></span>
+                <span class="pf-mod-name">{{ moduloLabel(mod) }}</span>
+              </div>
+            }
+          </div>
+          <div class="pf-modulos-sin-permiso">Dashboard siempre es visible para este rol.</div>
+        </div>
+
+        <!-- Sección: Acciones del modulo activo para el rol activo -->
+        <div class="pf-section">
+          <div class="pf-section-title">Acciones en {{ moduloLabel(moduloActivo) }}</div>
+          <div class="pf-acciones-lista">
+            @for (accion of acciones; track accion.campo) {
+              <div class="pf-accion-row">
+                <span class="pf-accion-label">{{ accion.label }}</span>
+                <div class="toggle" [class.on]="permisoActivo[accion.campo]"
+                     (click)="permisoActivo[accion.campo] = !permisoActivo[accion.campo]">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- Botón guardar -->
+      <div class="pf-footer">
+        <button class="btn-guardar-permisos" (click)="guardarPermisos()"
+          [disabled]="loadingPermisos || guardandoPermisos || !!errorPermisos">
+          <span [innerHTML]="svgSave"></span>
+          {{ guardandoPermisos ? 'Guardando...' : 'Guardar configuracion' }}
+        </button>
+      </div>
+
+    </div><!-- /profile-dropdown -->
+
+  </div>
+</header>

@@ -1,0 +1,53 @@
+<!-- componente sidebar -->
+<div class="mobile-overlay" [class.show]="mobileOpen" (click)="closeMobile()"></div>
+<div id="sidebar" [class.collapsed]="sidebarState.collapsed()" [class.mobile-open]="mobileOpen">
+
+  <button class="sidebar-logo-btn" (click)="toggleSidebar()" title="Contraer / Expandir menu">
+    <div class="logo-img-wrap">
+      <img src="logoverde.jpeg" alt="SENA Logo" />
+      <div class="logo-toggle-hint">
+        <span>{{ sidebarState.collapsed() ? '>' : '&lt;' }}</span>
+      </div>
+    </div>
+    <div class="logo-texts">
+      <div class="logo-name">Zona Avicola</div>
+      <div class="logo-sub">SENA - Sistema Avicola</div>
+    </div>
+  </button>
+
+  <nav class="sidebar-nav">
+    @for (item of navItems; track item.id) {
+      <a [routerLink]="item.route" routerLinkActive="active" class="nav-btn" [title]="item.label" (click)="closeMobile()">
+        <span class="nav-icon-wrap">
+          <span class="nav-icon" [innerHTML]="navIcon(item.id)"></span>
+        </span>
+        <span class="nav-label">{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+
+  <div class="sidebar-footer">
+    <button class="nav-btn logout" (click)="confirmarLogout()" title="Cerrar Sesion">
+      <span class="nav-icon-wrap">
+        <span class="nav-icon" [innerHTML]="svgDoor"></span>
+      </span>
+      <span class="nav-label">Cerrar Sesion</span>
+    </button>
+  </div>
+
+</div>
+
+<!-- modal confirmar logout -->
+@if (showLogoutModal) {
+  <div class="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center animate-[fadeIn_0.2s_ease]" (click)="cancelarLogout()">
+    <div class="bg-white border border-[var(--border-color)] rounded-2xl px-11 py-10 w-[340px] text-center shadow-[0_20px_60px_rgba(0,0,0,0.3)] animate-[slideUp_0.25s_cubic-bezier(0.22,0.68,0,1.3)]" (click)="$event.stopPropagation()">
+      <div class="w-12 h-12 mx-auto mb-3.5 rounded-full bg-[#fdecea] text-[#c0392b] flex items-center justify-center [&_svg]:w-[22px] [&_svg]:h-[22px]" [innerHTML]="svgDoor"></div>
+      <div class="text-[length:var(--fs-xl)] font-bold text-[#2c3e50] mb-2">Cerrar sesion</div>
+      <div class="text-[length:var(--fs-base)] text-[#7f8c8d] mb-7">¿Estas seguro que deseas salir?</div>
+      <div class="flex gap-3">
+        <button class="flex-1 p-[13px] border-2 border-[#dfe4ea] rounded-[10px] bg-transparent text-[#7f8c8d] text-[length:var(--fs-base)] font-semibold cursor-pointer transition-colors duration-150 hover:border-[#b2bec3] hover:text-[#2c3e50]" (click)="cancelarLogout()">Cancelar</button>
+        <button class="flex-1 p-[13px] border-none rounded-[10px] bg-[#e53935] text-white text-[length:var(--fs-base)] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[#c62828]" (click)="confirmarSalir()">Salir</button>
+      </div>
+    </div>
+  </div>
+}

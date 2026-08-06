@@ -1,0 +1,15 @@
+# Dependencias del servidor de vision para clasificacion de huevos
+# Instalar con: pip install -r requirements.txt
+
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+scikit-image==0.22.0
+Pillow==10.3.0
+pytesseract==0.3.10   # fallback OCR si ssocr no esta instalado
+pydantic==2.7.1
+
+# ssocr se instala como binario del sistema (no pip):
+#   Ubuntu/Debian: sudo apt install ssocr
+#   Si no esta disponible, el sistema usa pytesseract como fallback automatico

@@ -1,0 +1,169 @@
+<div class="tab-panel">
+  <div class="two-col-layout">
+
+    <!-- Formulario tratamiento -->
+    <div class="form-section">
+      <div class="form-section-title">{{ svc.tratFormTitle }}</div>
+
+      <div class="input-group">
+        <label class="input-label">Lote</label>
+        <select class="input-field" [(ngModel)]="svc.tratForm.lote_id">
+          <option value="">Seleccionar lote...</option>
+          @for (l of svc.lotes; track l._id) {
+          <option [value]="l._id">{{ l.id }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Tipo: selector con opción de agregar -->
+      <div class="input-group">
+        <label class="input-label">
+          Tipo
+          <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('tiposTrat','Tipo')" title="Agregar tipo">+</button>
+        </label>
+        <select class="input-field" [(ngModel)]="svc.tratForm.tipo">
+          @for (o of svc.opciones.tiposTrat; track o) {
+          <option [value]="o">{{ o }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label">Medicamento *</label>
+        <input class="input-field" [(ngModel)]="svc.tratForm.med" placeholder="Nombre del medicamento">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Dosis</label>
+        <input class="input-field" [(ngModel)]="svc.tratForm.dosis" placeholder="Ej: 2ml/L agua">
+      </div>
+
+      <div class="two-col-form">
+        <div class="input-group">
+          <label class="input-label">Fecha</label>
+          <input class="input-field" type="date" [(ngModel)]="svc.tratForm.fecha">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Próxima dosis</label>
+          <input class="input-field" type="date" [(ngModel)]="svc.tratForm.proxima">
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label">Veterinario</label>
+        <input class="input-field" [(ngModel)]="svc.tratForm.vet" placeholder="Nombre del veterinario">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Observaciones</label>
+        <textarea class="input-field" [(ngModel)]="svc.tratForm.obs" rows="2"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" (click)="svc.guardarTrat()" [disabled]="!svc.puedeGuardar(svc.editingTratId)">Guardar</button>
+        <button class="btn btn-secondary"
+          (click)="svc.tratForm=svc.newTratForm();svc.editingTratId=null;svc.tratFormTitle='Registrar Tratamiento'">Limpiar</button>
+      </div>
+    </div>
+
+    <!-- Tabla tratamientos -->
+    <div class="list-section">
+      <div class="section-header-block">
+        <div class="section-header-left">
+          <span class="section-main-title">Tratamientos Registrados</span>
+        </div>
+      </div>
+      <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Mes</label>
+    <input class="input-field" type="month" [(ngModel)]="svc.tratFiltroFecha" (change)="svc.filterTrats()">
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Tipo</label>
+    <select class="input-field" [(ngModel)]="svc.tratFiltroEstado" (change)="svc.filterTrats()">
+            <option value="">Todos</option>
+            @for (o of svc.opciones.tiposTrat; track o) { <option [value]="o">{{ o }}</option> }
+          </select>
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.tratPageSize" (change)="svc.onChange_tratSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize('trat', $event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.tratFiltroFecha='';svc.tratFiltroEstado='';svc.filterTrats()"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+
+      <!-- 4 columnas: Lote+Tipo fusionados, Medicamento, Próxima, Acc. — sin columna Fecha para evitar scroll -->
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Lote / Tipo</th>
+            <th>Medicamento</th>
+            <th>Próxima</th>
+            <th>Acc.</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (svc.tratsFiltered.length === 0) {
+          <tr>
+            <td colspan="4" class="empty-cell">Sin tratamientos.</td>
+          </tr>
+          }
+          @for (r of svc.tratsPage; track r._id) {
+          <tr>
+            <!-- Lote y tipo apilados en una sola celda -->
+            <td>
+              <span class="badge badge-green">{{ r.lote }}</span>
+              <br>
+              <span class="badge badge-blue" style="margin-top:4px">{{ r.tipo }}</span>
+            </td>
+            <td>
+              <strong>{{ r.med }}</strong>
+              <br><small class="text-muted">{{ r.dosis }}</small>
+            </td>
+            <!-- Próxima dosis con indicador visual de estado -->
+            <td>
+              @if (r.proxima) {
+              <span class="proxima-badge" [class.vencido]="svc.estadoProxima(r.proxima)==='vencido'"
+                [class.urgente]="svc.estadoProxima(r.proxima)==='urgente'">
+                {{ svc.fmtDate(r.proxima) }}
+                @if (svc.estadoProxima(r.proxima)==='vencido') {
+                <span class="proxima-dot dot-vencido"></span>
+                }
+                @if (svc.estadoProxima(r.proxima)==='urgente') {
+                <span class="proxima-dot dot-urgente"></span>
+                }
+              </span>
+              } @else {
+              <span>—</span>
+              }
+            </td>
+            <!-- Acciones: editar y eliminar -->
+            <td class="td-actions">
+              <button class="btn btn-secondary btn-sm" (click)="svc.editTrat(r)" [disabled]="!svc.puedeEditarModulo">Editar</button>
+              <button class="btn btn-danger btn-sm" (click)="svc.elimTrat(r)" [disabled]="!svc.puedeEliminar">Eliminar</button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="za-pag-bar">
+        <span class="za-pag-info">{{ svc.tratsFiltered.length }} tratamientos</span>
+        @if (svc.totalPagTrats > 1) {
+        <div class="za-pagination">
+          <button class="za-page-btn" (click)="svc.tratPage=svc.tratPage-1" [disabled]="svc.tratPage===1">&#8249;</button>
+          @for (p of svc.pagesVisibles(svc.totalPagTrats, svc.tratPage); track p) {
+            @if (p === -1) { <span class="za-page-dots">…</span> }
+            @else { <button class="za-page-btn" [class.za-active]="svc.tratPage===p" (click)="svc.tratPage=p">{{ p }}</button> }
+          }
+          <button class="za-page-btn" (click)="svc.tratPage=svc.tratPage+1" [disabled]="svc.tratPage===svc.totalPagTrats">&#8250;</button>
+        </div>
+        }
+      </div>
+    </div>
+
+  </div>
+</div>

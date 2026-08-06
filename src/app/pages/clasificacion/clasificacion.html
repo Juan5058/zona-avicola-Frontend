@@ -1,0 +1,36 @@
+
+
+<!-- ═══════════════════════════════════════════
+     MODULO CLASIFICACION DE HUEVOS
+     Automatico: camara + clasificacion por volumen / peso bascula
+     Manual: conteo por teclado o flechas
+════════════════════════════════════════════ -->
+
+<!-- selector de modo -->
+<div class="tab-bar">
+  <button class="tab-btn" [class.za-active]="svc.modo === 'auto'" (click)="svc.setModo('auto')">
+    Automatico (Camara)
+  </button>
+  <button class="tab-btn" [class.za-active]="svc.modo === 'manual'" (click)="svc.setModo('manual')">
+    Manual
+  </button>
+</div>
+
+<!-- ══════════ CONTENIDO DE MODO ACTIVO (subcomponentes) ══════════ -->
+@if (svc.modo === 'auto') { <app-clasificacion-auto /> }
+@if (svc.modo === 'manual') { <app-clasificacion-manual /> }
+
+<!-- ══════════ HISTORIAL (siempre visible) ══════════ -->
+<app-clasificacion-historico />
+
+<!-- modal confirmacion -->
+<div class="modal-overlay" [class.show]="svc.confirmVisible" (click)="svc.confirmNo()">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    <div class="modal-title">Confirmar accion</div>
+    <p class="confirm-msg">{{ svc.confirmMsg }}</p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="svc.confirmNo()">Cancelar</button>
+      <button class="btn btn-danger"    (click)="svc.confirmYes()">Confirmar</button>
+    </div>
+  </div>
+</div>

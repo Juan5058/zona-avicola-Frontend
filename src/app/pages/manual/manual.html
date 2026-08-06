@@ -1,0 +1,158 @@
+<!-- ══════════ MANUAL ══════════ -->
+<div class="manual-wrap">
+
+  <!-- Cabecera -->
+  <div class="manual-header">
+    <div class="manual-header-text">
+      <div class="manual-page-title">Manual de usuario</div>
+      <div class="manual-page-sub">Guia de referencia rapida para todos los modulos del sistema</div>
+    </div>
+    <div class="search-bar">
+      <span class="search-icon" [innerHTML]="svgSearch"></span>
+      <input
+        type="text"
+        placeholder="Buscar seccion..."
+        [(ngModel)]="searchQuery"
+        class="search-input"
+      />
+      <button *ngIf="searchQuery" class="search-clear" [innerHTML]="svgClose" (click)="searchQuery = ''"></button>
+    </div>
+  </div>
+
+  <!-- Grid fijo cuando NO hay busqueda activa -->
+  <ng-container *ngIf="!searchQuery">
+
+    <!-- Fila 1: 4 tarjetas (modulos principales) -->
+    <div class="manual-row manual-row-4">
+      <div
+        class="man-card"
+        *ngFor="let s of seccionesRow1"
+        (click)="abrirModal(s)"
+        [style.--card-color]="s.color"
+      >
+        <ng-container *ngTemplateOutlet="cardBody; context: { s: s }"></ng-container>
+      </div>
+    </div>
+
+    <!-- Fila 2: 4 tarjetas (modulos secundarios) -->
+    <div class="manual-row manual-row-4">
+      <div
+        class="man-card"
+        *ngFor="let s of seccionesRow2"
+        (click)="abrirModal(s)"
+        [style.--card-color]="s.color"
+      >
+        <ng-container *ngTemplateOutlet="cardBody; context: { s: s }"></ng-container>
+      </div>
+    </div>
+
+    <!-- Fila 3: tarjeta de Tips centrada -->
+    <div class="manual-row manual-row-tips">
+      <div
+        class="man-card man-card-tips"
+        *ngFor="let s of seccionesRow3"
+        (click)="abrirModal(s)"
+        [style.--card-color]="s.color"
+      >
+        <ng-container *ngTemplateOutlet="cardBody; context: { s: s }"></ng-container>
+      </div>
+    </div>
+
+  </ng-container>
+
+  <!-- Grid libre cuando hay busqueda activa -->
+  <div class="manual-grid" *ngIf="searchQuery">
+    <div
+      class="man-card"
+      *ngFor="let s of seccionesFiltradas"
+      (click)="abrirModal(s)"
+      [style.--card-color]="s.color"
+    >
+      <ng-container *ngTemplateOutlet="cardBody; context: { s: s }"></ng-container>
+    </div>
+  </div>
+
+  <!-- Sin resultados -->
+  <div class="no-results" *ngIf="searchQuery && seccionesFiltradas.length === 0">
+    <span class="no-results-icon" [innerHTML]="svgSearch"></span>
+    <p>No se encontraron secciones para <strong>"{{ searchQuery }}"</strong></p>
+  </div>
+
+</div>
+
+<!-- Template reutilizable del cuerpo de cada tarjeta -->
+<ng-template #cardBody let-s="s">
+  <div class="man-card-header">
+    <div class="man-icon" [innerHTML]="modIcon(s.icon)"></div>
+    <span *ngIf="s.badge" class="man-badge" [class]="'badge-' + s.badgeType">{{ s.badge }}</span>
+  </div>
+  <div class="man-title">{{ s.title }}</div>
+  <div class="man-desc">{{ s.desc }}</div>
+  <div class="man-footer">
+    <span class="man-items-count">{{ s.items.length }} funciones</span>
+    <span class="man-expand-hint">Ver detalle &rsaquo;</span>
+  </div>
+</ng-template>
+
+<!-- ══════════ MODAL ══════════ -->
+<div class="modal-backdrop" *ngIf="modalAbierto" (click)="cerrarModal()">
+  <div class="modal-box" (click)="$event.stopPropagation()" *ngIf="seccionActiva">
+
+    <!-- Header colorido -->
+    <div class="modal-header" [style.background]="seccionActiva.gradient">
+      <div class="modal-header-content">
+        <div class="modal-icon" [innerHTML]="modIcon(seccionActiva.icon)"></div>
+        <div class="modal-header-text">
+          <div class="modal-pretitle">
+            Modulo
+            <span *ngIf="seccionActiva.badge" class="modal-header-badge">{{ seccionActiva.badge }}</span>
+          </div>
+          <div class="modal-title">{{ seccionActiva.title }}</div>
+          <div class="modal-subtitle">{{ seccionActiva.desc }}</div>
+        </div>
+      </div>
+      <button class="modal-close" [innerHTML]="svgClose" (click)="cerrarModal()"></button>
+    </div>
+
+    <!-- Cuerpo del modal -->
+    <div class="modal-body">
+
+      <!-- Lista de funcionalidades -->
+      <div class="modal-section">
+        <div class="modal-section-title">FUNCIONALIDADES PRINCIPALES</div>
+        <div class="modal-items-list">
+          <div class="modal-item" *ngFor="let item of seccionActiva.items; let i = index">
+            <div class="modal-item-num" [style.background]="seccionActiva.gradient">{{ i + 1 }}</div>
+            <div class="modal-item-text">{{ item }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pasos rapidos si existen -->
+      <div class="modal-section" *ngIf="seccionActiva.pasos && seccionActiva.pasos.length">
+        <div class="modal-section-title">COMO USARLO</div>
+        <div class="modal-steps">
+          <div class="modal-step" *ngFor="let paso of seccionActiva.pasos; let i = index">
+            <div class="step-circle" [style.background]="seccionActiva.gradient">{{ i + 1 }}</div>
+            <div class="step-text">{{ paso }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats / resumen abajo -->
+      <div class="modal-stats" *ngIf="seccionActiva.stats && seccionActiva.stats.length">
+        <div class="modal-stat" *ngFor="let stat of seccionActiva.stats">
+          <div class="stat-value" [style.color]="seccionActiva.color">{{ stat.value }}</div>
+          <div class="stat-label">{{ stat.label }}</div>
+        </div>
+      </div>
+
+      <!-- Tip -->
+      <div class="modal-tip" *ngIf="seccionActiva.tip">
+        <span class="tip-icon" [innerHTML]="svgTip"></span>
+        <span class="tip-text">{{ seccionActiva.tip }}</span>
+      </div>
+
+    </div>
+  </div>
+</div>

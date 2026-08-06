@@ -1,0 +1,223 @@
+
+        @if (svc.stats) {
+          <div class="usr-stats-row">
+            <div class="usr-stat admin-card">
+              <div class="stat-n">{{ svc.stats.admin }}</div>
+              <div class="stat-l">Administradores</div>
+            </div>
+            <div class="usr-stat operador-card">
+              <div class="stat-n">{{ svc.stats.operador }}</div>
+              <div class="stat-l">Operadores</div>
+            </div>
+            <div class="usr-stat visit-card">
+              <div class="stat-n">{{ svc.stats.visitante }}</div>
+              <div class="stat-l">Visitantes</div>
+            </div>
+            <div class="usr-stat">
+              <div class="stat-n">{{ svc.stats.activos }}</div>
+              <div class="stat-l">Activos</div>
+            </div>
+          </div>
+        }
+
+        <div class="sub-tabs">
+          <button class="sub-tab" [class.za-active]="svc.usrTab === 'lista'" (click)="svc.usrTab = 'lista'">Lista de usuarios</button>
+          <button class="sub-tab" [class.za-active]="svc.usrTab === 'nuevo'"
+            (click)="svc.usrTab = 'nuevo'; svc.editId = null; svc.form = svc.newForm(); svc.permisoInfo = null; svc.formTitle = 'Nuevo Usuario'">
+            {{ svc.editId ? 'Editar usuario' : 'Nuevo usuario' }}
+          </button>
+        </div>
+
+        <!-- Lista -->
+        @if (svc.usrTab === 'lista') {
+          <div class="sub-card">
+            <div class="section-header-block">
+              <div class="section-header-left">
+                <span class="section-main-title">Lista de usuarios</span>
+              </div>
+            </div>
+            <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Buscar</label>
+    <input class="input-field" [(ngModel)]="svc.usrSearch" (input)="svc.filterUsr()" placeholder="Nombre o usuario...">
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Rol</label>
+    <select class="input-field" [(ngModel)]="svc.usrRolFilter" (change)="svc.filterUsr()">
+                  <option value="">Todos</option>
+                  @for (r of svc.roles; track r.id_rol) { <option [value]="r.id_rol">{{ r.nombre }}</option> }
+                </select>
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.usrPageSize" (change)="svc.onChangeUsrSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSizeUsr($event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.usrSearch='';svc.usrRolFilter='';svc.filterUsr()"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+            <div style="overflow-x:auto">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Correo</th>
+                    <th>Rol</th>
+                    <th>Estado</th>
+                    <th>Fecha de creacion</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @if (svc.usersFiltered.length === 0) {
+                    <tr><td colspan="6" class="td-empty">Sin usuarios que coincidan</td></tr>
+                  }
+                  @for (u of svc.usrPage_data; track u.id_usuario) {
+                    <tr>
+                      <td>
+                        <div class="usr-cell">
+                          <span class="usr-avatar" [style.background]="svc.getAvatarBg(u.rol?.nombre)">{{ svc.getIni(u.nombre_completo) }}</span>
+                          <div>
+                            <strong>{{ u.nombre_completo }}</strong>
+                            @if (svc.esYo(u)) {
+                              <span class="badge badge-green" style="font-size:9px; margin-left:4px">Tu</span>
+                            }
+                            <div class="usr-sub">&#64;{{ u.nombre_usuario }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{{ u.email }}</td>
+                      <td>
+                        <span class="badge" [ngClass]="svc.getRolCls(u.rol?.nombre)">{{ u.rol?.nombre || '—' }}</span>
+                      </td>
+                      <td>
+                        <span class="badge" [ngClass]="u.activo ? 'badge-green' : 'badge-gray'">
+                          {{ u.activo ? 'Activo' : 'Inactivo' }}
+                        </span>
+                      </td>
+                      <td class="td-fecha">{{ svc.fmtDate(u.fecha_creacion) }}</td>
+                      <td>
+                        <div class="td-actions">
+                          <button class="btn btn-secondary btn-sm" (click)="svc.editUsr(u)">Editar</button>
+                          <button class="btn btn-danger btn-sm" (click)="svc.elimUsr(u)" [disabled]="svc.esYo(u)">Desactivar</button>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <div class="za-pag-bar">
+              <span class="za-pag-info">{{ svc.usersFiltered.length }} usuarios</span>
+              @if (svc.totalPagUsr > 1) {
+              <div class="za-pagination">
+                <button class="za-page-btn" (click)="svc.usrPage=svc.usrPage-1" [disabled]="svc.usrPage===1">&lsaquo;</button>
+                @for (p of svc.pagesVisibles(svc.totalPagUsr, svc.usrPage); track p) {
+                  @if (p === -1) { <span class="za-page-dots">…</span> }
+                  @else { <button class="za-page-btn" [class.za-active]="svc.usrPage===p" (click)="svc.usrPage=p">{{ p }}</button> }
+                }
+                <button class="za-page-btn" (click)="svc.usrPage=svc.usrPage+1" [disabled]="svc.usrPage===svc.totalPagUsr">&rsaquo;</button>
+              </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Formulario nuevo / editar -->
+        @if (svc.usrTab === 'nuevo') {
+          <div class="sub-card">
+            <div class="sub-card-title">{{ svc.formTitle }}</div>
+
+            <div class="usr-form-layout">
+              <!-- Columna izquierda: campos -->
+              <div class="usr-form-fields">
+                <div class="input-group">
+                  <label class="input-label">Nombre completo *</label>
+                  <input class="input-field" [(ngModel)]="svc.form.nombre_completo" placeholder="Ej: Juan Garcia Perez">
+                </div>
+                <div class="usr-form-row">
+                  <div class="input-group">
+                    <label class="input-label">Nombre de usuario *</label>
+                    <input class="input-field" [(ngModel)]="svc.form.nombre_usuario" placeholder="Ej: jgarcia">
+                  </div>
+                  <div class="input-group">
+                    <label class="input-label">Rol *</label>
+                    <select class="input-field" [(ngModel)]="svc.form.id_rol" (change)="svc.updatePermisos()">
+                      <option value="">— Seleccionar —</option>
+                      @for (r of svc.rolesFormulario; track r.id_rol) {
+                        <option [value]="r.id_rol">{{ r.nombre }}</option>
+                      }
+                    </select>
+                  </div>
+                </div>
+                <div class="input-group">
+                  <label class="input-label">Correo electronico *</label>
+                  <input class="input-field" type="email" [(ngModel)]="svc.form.email" placeholder="correo&#64;sena.edu.co">
+                </div>
+                @if (!svc.esVisitante()) {
+                  <div class="input-group">
+                    <label class="input-label">Contrasena {{ svc.editId ? '(dejar vacio para no cambiar)' : '*' }}</label>
+                    <div class="pass-wrap">
+                      <input class="input-field" [type]="svc.showPass ? 'text' : 'password'"
+                        [(ngModel)]="svc.form.contrasena" placeholder="Minimo 6 caracteres" style="padding-right:52px">
+                      <button type="button" class="btn-pass-toggle" (click)="svc.showPass = !svc.showPass">
+                        {{ svc.showPass ? 'Ocultar' : 'Ver' }}
+                      </button>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="visitante-hint">
+                    <span class="hint-icon">ℹ️</span>
+                    <span>El rol <strong>Visitante</strong> no requiere contrasena — el acceso es solo lectura sin autenticacion.</span>
+                  </div>
+                }
+                <div class="form-actions">
+                  <button class="btn btn-primary" (click)="svc.guardarUsr()">{{ svc.editId ? 'Actualizar usuario' : 'Guardar usuario' }}</button>
+                  <button class="btn btn-secondary" (click)="svc.form = svc.newForm(); svc.editId = null; svc.permisoInfo = null; svc.formTitle = 'Nuevo Usuario'">
+                    Limpiar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Columna derecha: permisos del rol -->
+              <div class="usr-form-permisos">
+                @if (svc.permisoInfo) {
+                  <div class="permisos-box">
+                    <div class="permisos-title">Permisos del rol</div>
+                    <div class="permisos-desc"><strong>{{ svc.permisoInfo.nivel }}:</strong> {{ svc.permisoInfo.desc }}</div>
+                    @for (m of svc.modulos; track m.id) {
+                      <div class="permiso-item">
+                        <span class="permiso-label">{{ m.label }}</span>
+                        <span class="permiso-badge" [ngClass]="svc.permisoCls(svc.permisoInfo.permisos[m.id])">
+                          {{ svc.permisoInfo.permisos[m.id] }}
+                        </span>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="permisos-placeholder">
+                    <div class="permisos-placeholder-txt">Selecciona un rol para ver sus permisos</div>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+
+        <div class="sub-stats-bar">
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.users.length }}</span>
+            <span class="sub-stat-l">Total</span>
+          </div>
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.stats?.activos || 0 }}</span>
+            <span class="sub-stat-l">Activos</span>
+          </div>
+          <div class="sub-stat-item">
+            <span class="sub-stat-n">{{ svc.roles.length }}</span>
+            <span class="sub-stat-l">Roles</span>
+          </div>
+        </div>

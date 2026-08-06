@@ -1,0 +1,381 @@
+<div class="tab-panel">
+
+  <!-- kpis -->
+  <div class="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-val">{{ svc.kpiTotal }}</div>
+      <div class="kpi-label">Items registrados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val kpi-green">{{ svc.kpiValorTotal }}</div>
+      <div class="kpi-label">Valor en stock</div>
+    </div>
+    <div class="kpi-card" [class.kpi-warn-active]="svc.kpiBajos > 0">
+      <div class="kpi-val" [class.kpi-orange]="svc.kpiBajos > 0">{{ svc.kpiBajos }}</div>
+      <div class="kpi-label">Stock bajo</div>
+    </div>
+    <div class="kpi-card" [class.kpi-crit-active]="svc.kpiCriticos > 0">
+      <div class="kpi-val" [class.kpi-red]="svc.kpiCriticos > 0">{{ svc.kpiCriticos }}</div>
+      <div class="kpi-label">Criticos</div>
+    </div>
+  </div>
+
+  <!-- alertas -->
+  @if (svc.invAlerts.length > 0) {
+    <div class="inv-alerts-bar">
+      @for (r of svc.invAlerts; track r._id) {
+        <div class="inv-alert" [class.critical]="r.cant <= r.min">
+          <span class="alert-dot" [class.critical]="r.cant <= r.min"></span>
+          <span>
+            <strong>{{ r.nombre }}</strong>:
+            {{ r.cant <= r.min ? 'Stock critico' : 'Stock bajo' }} &mdash;
+            {{ r.cant }} {{ r.unidad }} (min: {{ r.min }})
+          </span>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- subtab bar -->
+  <div class="subtab-bar">
+    <button class="subtab-btn" [class.za-active]="svc.subTabGeneral==='catalogo'"    (click)="svc.subTabGeneral='catalogo'">Catalogo</button>
+    <button class="subtab-btn" [class.za-active]="svc.subTabGeneral==='movimientos'" (click)="svc.subTabGeneral='movimientos'">Movimientos</button>
+  </div>
+
+  <!-- ── SUBTAB: CATALOGO ── -->
+  @if (svc.subTabGeneral === 'catalogo') {
+  <div class="main-layout">
+
+    <div class="col-forms">
+      <div class="form-section">
+        <div class="form-section-title">{{ svc.invFormTitle }}</div>
+
+        <div class="input-group">
+          <label class="input-label">Nombre *</label>
+          <input class="input-field" [(ngModel)]="svc.invForm.nombre" placeholder="Ej: Vacuna Newcastle...">
+        </div>
+
+        <div class="two-col-form">
+          <div class="input-group">
+            <label class="input-label">
+              Categoria *
+              <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('categorias','Categoria')" title="Agregar">+</button>
+            </label>
+            <select class="input-field" [(ngModel)]="svc.invForm.cat_id">
+              <option value="">-- Seleccionar --</option>
+              @for (c of svc.cats; track c.id) {
+                <option [value]="c.id">{{ c.nombre }}</option>
+              }
+            </select>
+          </div>
+          <div class="input-group">
+            <label class="input-label">
+              Unidad
+              <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('unidades','Unidad')" title="Agregar">+</button>
+            </label>
+            <select class="input-field" [(ngModel)]="svc.invForm.unidad">
+              @for (u of svc.opcionesUnidades; track u) {
+                <option [value]="u">{{ u }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="two-col-form">
+          <div class="input-group">
+            <label class="input-label">Stock Minimo</label>
+            <input class="input-field" type="number" [(ngModel)]="svc.invForm.min" placeholder="0" min="0">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Costo Unitario</label>
+            <input class="input-field" type="number" [(ngModel)]="svc.invForm.costo" placeholder="0" min="0">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Proveedor</label>
+          <input class="input-field" [(ngModel)]="svc.invForm.proveedor" placeholder="Opcional">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Observaciones</label>
+          <textarea class="input-field" [(ngModel)]="svc.invForm.obs" rows="2"></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" (click)="svc.guardarInv()" [disabled]="!svc.puedeGuardar(svc.editInvId)">
+            {{ svc.editInvId ? 'Actualizar' : 'Guardar' }}
+          </button>
+          <button class="btn btn-secondary" (click)="svc.invForm=svc.newInvForm();svc.editInvId=null;svc.invFormTitle='Registrar Item'">
+            Limpiar
+          </button>
+        </div>
+      </div>
+    </div><!-- /col-forms -->
+
+    <div class="col-tables">
+      <div class="list-section">
+
+        <div class="section-header-block">
+          <div class="section-header-left">
+            <span class="section-main-title">Items en stock</span>
+            @if (svc.invFiltered.length > 0) {
+            <span class="section-kpi accent">Valor total: <strong>{{ svc.valorTotalFiltrado }}</strong></span>
+            }
+          </div>
+        </div>
+        <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Buscar</label>
+    <input class="input-field" [(ngModel)]="svc.invSearch" (input)="svc.filterInv()" placeholder="Buscar item...">
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Categoría</label>
+    <select class="input-field" [(ngModel)]="svc.invCatFilter" (change)="svc.filterInv()">
+              <option value="">Todas</option>
+              @for (c of svc.cats; track c.id) { <option [value]="c.nombre">{{ c.nombre }}</option> }
+            </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Estado</label>
+    <select class="input-field" [(ngModel)]="svc.invEstadoFilter" (change)="svc.filterInv()">
+              <option value="">Todos</option>
+              <option value="ok">OK</option>
+              <option value="atencion">Atención</option>
+              <option value="critico">Crítico</option>
+            </select>
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.invPageSize" (change)="svc.onChange_invSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize('svc.inv', $event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.invSearch='';svc.invCatFilter='';svc.invEstadoFilter='';svc.filterInv()"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-item">Item</th>
+                <th class="col-cat">Categoria</th>
+                <th class="col-stock">Stock / Min.</th>
+                <th class="col-acc-sm">Acc.</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (svc.invFiltered.length === 0) {
+                <tr><td colspan="4" class="empty-cell">Sin registros.</td></tr>
+              }
+              @for (r of svc.invPage_data; track r._id) {
+                <tr [class.row-selected]="svc.movItemId == r._id && svc.subTabGeneral !== 'catalogo'">
+                  <td>
+                    <strong class="item-nombre">{{ r.nombre }}</strong>
+                    <br><small class="badge" [ngClass]="svc.getEstado(r).cls">{{ svc.getEstado(r).label }}</small>
+                  </td>
+                  <td><span class="badge badge-gray">{{ r.cat }}</span></td>
+                  <td>
+                    <strong [style.color]="svc.getStockColor(r)">{{ r.cant }} {{ r.unidad }}</strong>
+                    <br><small class="text-muted">min: {{ r.min }}</small>
+                  </td>
+                  <td>
+                    <div class="td-actions">
+                      <button class="btn btn-secondary btn-xs" (click)="svc.editInv(r)" [disabled]="!svc.puedeEditarModulo">Editar</button>
+                      <button class="btn btn-danger   btn-xs" (click)="svc.elimInv(r)" [disabled]="!svc.puedeEliminar">Elim.</button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="za-pag-bar">
+          <span class="za-pag-info">{{ svc.invFiltered.length }} items</span>
+          @if (svc.totalPagInv > 1) {
+            <div class="za-pagination">
+              <button class="za-page-btn" (click)="svc.invPage=svc.invPage-1" [disabled]="svc.invPage===1">&lsaquo;</button>
+              @for (p of svc.pagesVisibles(svc.totalPagInv, svc.invPage); track p) {
+                @if (p === -1) { <span class="za-page-dots">…</span> }
+                @else { <button class="za-page-btn" [class.za-active]="svc.invPage===p" (click)="svc.invPage=p">{{ p }}</button> }
+              }
+              <button class="za-page-btn" (click)="svc.invPage=svc.invPage+1" [disabled]="svc.invPage===svc.totalPagInv">&rsaquo;</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div><!-- /col-tables -->
+
+  </div><!-- /main-layout catalogo -->
+  }
+
+  <!-- ── SUBTAB: MOVIMIENTOS ── -->
+  @if (svc.subTabGeneral === 'movimientos') {
+  <div class="main-layout">
+
+    <div class="col-forms">
+      <div class="form-section">
+
+        <!-- toggle entrada / salida -->
+        <div class="mov-toggle">
+          <button class="mov-btn entrada" [class.za-active]="svc.movTipo==='entrada'" (click)="svc.movTipo='entrada'">
+            + Entrada
+          </button>
+          <button class="mov-btn salida"  [class.za-active]="svc.movTipo==='salida'"  (click)="svc.movTipo='salida'">
+            - Salida
+          </button>
+        </div>
+
+        <div class="form-section-title">
+          {{ svc.movTipo === 'entrada' ? 'Registrar Entrada de Stock' : 'Registrar Salida de Stock' }}
+        </div>
+
+        <!-- item seleccionado o selector -->
+        @if (svc.movItem) {
+          <div class="mov-item-card" (click)="svc.movItem=null;svc.movItemId=''">
+            <div class="mov-item-info">
+              <strong>{{ svc.movItem.nombre }}</strong>
+              <span class="badge badge-gray">{{ svc.movItem.cat }}</span>
+            </div>
+            <div class="mov-item-stock">
+              Stock actual: <strong [style.color]="svc.getStockColor(svc.movItem)">{{ svc.movItem.cant }} {{ svc.movItem.unidad }}</strong>
+            </div>
+            <small class="mov-item-change">Toca para cambiar item</small>
+          </div>
+        } @else {
+          <div class="input-group">
+            <label class="input-label">Item *</label>
+            <select class="input-field" [(ngModel)]="svc.movItemId" (change)="svc.onMovItemChange()">
+              <option value="">Seleccionar item...</option>
+              @for (r of svc.inv; track r._id) {
+                <option [value]="r._id">{{ r.nombre }} — {{ r.cant }} {{ r.unidad }}</option>
+              }
+            </select>
+          </div>
+        }
+
+        <div class="input-group">
+          <label class="input-label">Cantidad *</label>
+          <input class="input-field" type="number" [(ngModel)]="svc.movCantidad" placeholder="0" min="1">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Fecha</label>
+          <input class="input-field" type="date" [(ngModel)]="svc.movFecha">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">{{ svc.movTipo === 'salida' ? 'Destino / Observacion' : 'Observacion' }}</label>
+          <textarea class="input-field" [(ngModel)]="svc.movObs" rows="2"
+            [placeholder]="svc.movTipo === 'salida' ? 'Ej: Galpon 3, tratamiento lote A...' : 'Ej: Compra proveedor X...'"></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn" [ngClass]="svc.movTipo==='entrada' ? 'btn-success' : 'btn-warning'"
+            (click)="svc.guardarMovimientoInv()" [disabled]="!svc.puedeGuardar(svc.editMovInvId)">
+            {{ svc.editMovInvId ? 'Actualizar' : (svc.movTipo === 'entrada' ? 'Registrar Entrada' : 'Registrar Salida') }}
+          </button>
+          <button class="btn btn-secondary" (click)="svc.limpiarMovInv()">Limpiar</button>
+        </div>
+      </div>
+    </div><!-- /col-forms -->
+
+    <div class="col-tables">
+      <div class="list-section">
+        <div class="section-header-block">
+          <div class="section-header-left">
+            <span class="section-main-title">Historial de movimientos</span>
+          </div>
+        </div>
+        <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Tipo</label>
+    <select class="input-field" [(ngModel)]="svc.movFiltroTipo">
+              <option value="">Todos</option>
+              <option value="entrada">Entradas</option>
+              <option value="salida">Salidas</option>
+            </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Item</label>
+    <select class="input-field" [(ngModel)]="svc.movFiltroItem">
+              <option value="">Todos</option>
+              @for (r of svc.inv; track r._id) { <option [value]="r._id">{{ r.nombre }}</option> }
+            </select>
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.movInvPageSize" (change)="svc.onChange_movInvSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize('movInv', $event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.movFiltroTipo='';svc.movFiltroItem=''"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-fecha">Fecha</th>
+                <th class="col-item">Item</th>
+                <th class="col-cant">Movimiento</th>
+                <th class="col-alimento">Obs.</th>
+                <th class="col-acc-sm">Acc.</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (svc.movHistorialFiltrado.length === 0) {
+                <tr><td colspan="5" class="empty-cell">Sin movimientos registrados.</td></tr>
+              }
+              @for (r of svc.movHistorialPage; track r._id) {
+                <tr>
+                  <td class="fecha-cell">{{ svc.fmtDate(r.fecha) }}</td>
+                  <td><strong class="item-nombre">{{ r.nombre }}</strong><br><small class="text-muted">{{ r.unidad }}</small></td>
+                  <td>
+                    @if (r.tipo === 'entrada') {
+                      <strong class="kpi-green">+{{ r.cantidad }}</strong>
+                    } @else {
+                      <strong class="kpi-orange">-{{ r.cantidad }}</strong>
+                    }
+                    <br><small class="badge" [ngClass]="r.tipo==='entrada' ? 'badge-green' : 'badge-orange'">{{ r.tipo }}</small>
+                  </td>
+                  <td><small class="text-muted">{{ r.obs || '—' }}</small></td>
+                  <td>
+                    <div class="td-actions">
+                      <button class="btn btn-secondary btn-xs" (click)="svc.editMovInv(r)"  [disabled]="!svc.puedeEditarModulo">Editar</button>
+                      <button class="btn btn-danger   btn-xs" (click)="svc.elimMovInv(r)"   [disabled]="!svc.puedeEliminar">Elim.</button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="za-pag-bar">
+          <span class="za-pag-info">{{ svc.movHistorialFiltrado.length }} registros</span>
+          @if (svc.totalPagMovInv > 1) {
+            <div class="za-pagination">
+              <button class="za-page-btn" (click)="svc.movInvPage=svc.movInvPage-1" [disabled]="svc.movInvPage===1">&lsaquo;</button>
+              @for (p of svc.pagesVisibles(svc.totalPagMovInv, svc.movInvPage); track p) {
+                @if (p === -1) { <span class="za-page-dots">…</span> }
+                @else { <button class="za-page-btn" [class.za-active]="svc.movInvPage===p" (click)="svc.movInvPage=p">{{ p }}</button> }
+              }
+              <button class="za-page-btn" (click)="svc.movInvPage=svc.movInvPage+1" [disabled]="svc.movInvPage===svc.totalPagMovInv">&rsaquo;</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div><!-- /col-tables -->
+
+  </div><!-- /main-layout movimientos -->
+  }
+
+</div><!-- /tab general -->

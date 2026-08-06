@@ -1,0 +1,104 @@
+
+<div class="cfg-wrap">
+
+  <!-- ══════════════════════════════════════════════════════════════
+       VISTA PRINCIPAL: cuadricula 3 arriba + 2 abajo
+  ══════════════════════════════════════════════════════════════ -->
+  @if (!svc.activeCard) {
+    <div class="cfg-header">
+      <div class="cfg-title">Configuracion</div>
+      <div class="cfg-sub">Panel de administracion del sistema</div>
+    </div>
+
+    <div class="cfg-row cfg-row-3">
+      @for (card of svc.cardsRow1; track card.id) {
+        <div class="cfg-card" (click)="svc.openCard(card)">
+          <div class="cfg-card-stripe" [style.background]="'linear-gradient(135deg,' + card.color + ',' + card.colorDark + ')'">
+            <div class="cfg-card-title-group">
+              <span class="cfg-card-icon" [innerHTML]="svc.cardIcon(card.id)"></span>
+              <span class="cfg-card-label">{{ card.title }}</span>
+            </div>
+            <span class="cfg-card-badge">{{ card.badge }}</span>
+          </div>
+          <div class="cfg-card-body">
+            <div class="cfg-card-desc">{{ card.desc }}</div>
+            <ul class="cfg-card-list">
+              @for (item of card.items; track item) { <li>{{ item }}</li> }
+            </ul>
+            <div class="cfg-card-footer">
+              <span class="cfg-card-count">{{ card.items.length }} opciones</span>
+              <span class="cfg-card-cta" [style.color]="card.color">Abrir &rsaquo;</span>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="cfg-row cfg-row-2">
+      @for (card of svc.cardsRow2; track card.id) {
+        <div class="cfg-card" (click)="svc.openCard(card)">
+          <div class="cfg-card-stripe" [style.background]="'linear-gradient(135deg,' + card.color + ',' + card.colorDark + ')'">
+            <div class="cfg-card-title-group">
+              <span class="cfg-card-icon" [innerHTML]="svc.cardIcon(card.id)"></span>
+              <span class="cfg-card-label">{{ card.title }}</span>
+            </div>
+            <span class="cfg-card-badge">{{ card.badge }}</span>
+          </div>
+          <div class="cfg-card-body">
+            <div class="cfg-card-desc">{{ card.desc }}</div>
+            <ul class="cfg-card-list">
+              @for (item of card.items; track item) { <li>{{ item }}</li> }
+            </ul>
+            <div class="cfg-card-footer">
+              <span class="cfg-card-count">{{ card.items.length }} opciones</span>
+              <span class="cfg-card-cta" [style.color]="card.color">Abrir &rsaquo;</span>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════════════════════════
+       VISTA SUBMODULO
+  ══════════════════════════════════════════════════════════════ -->
+  @if (svc.activeCard) {
+    <div class="sub-header" [style.background]="'linear-gradient(135deg,' + svc.activeCard.color + ',' + svc.activeCard.colorDark + ')'">
+      <button class="sub-back" (click)="svc.closeCard()">&#8592; Volver</button>
+      <div class="sub-header-center">
+        <span class="sub-header-icon" [innerHTML]="svc.cardIcon(svc.activeCard.id)"></span>
+        <div>
+          <div class="sub-badge">{{ svc.activeCard.badge }}</div>
+          <div class="sub-title">{{ svc.activeCard.title }}</div>
+        </div>
+      </div>
+      <div class="sub-header-spacer"></div>
+    </div>
+
+    <div class="sub-body">
+
+      <!-- ══════════ CONTENIDO DE PESTAÑA ACTIVA (subcomponentes) ══════════ -->
+      @if (svc.activeCard.id === 'usuarios') { <app-configuracion-usuarios /> }
+      @if (svc.activeCard.id === 'notificaciones') { <app-configuracion-notificaciones /> }
+      @if (svc.activeCard.id === 'granja') { <app-configuracion-granja /> }
+      @if (svc.activeCard.id === 'catalogos') { <app-configuracion-catalogos /> }
+      @if (svc.activeCard.id === 'auditoria') { <app-configuracion-auditoria /> }
+
+    </div><!-- /sub-body -->
+  }
+
+  <!-- ══════════════════════════════════════════════════════════════
+       MODAL CONFIRMACION
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" [class.show]="svc.confirmVisible" (click)="svc.confirmNo()">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-title">Confirmar accion</div>
+      <p class="modal-msg" [innerHTML]="svc.confirmMsg"></p>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="svc.confirmNo()">Cancelar</button>
+        <button class="btn btn-danger"    (click)="svc.confirmYes()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /cfg-wrap -->

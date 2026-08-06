@@ -1,0 +1,128 @@
+
+        <div class="cat-global-layout">
+          <div class="cat-global-sidebar">
+            <div class="cat-sidebar-title">Listas del sistema</div>
+
+            <div class="cat-modulo-filtros">
+              <button class="cat-mod-btn" [class.za-active]="svc.catModuloFiltro === ''" (click)="svc.catModuloFiltro = ''">
+                Todas
+              </button>
+              @for (m of svc.catModulos; track m) {
+                <button class="cat-mod-btn" [class.za-active]="svc.catModuloFiltro === m" (click)="svc.catModuloFiltro = m">
+                  {{ m }}
+                </button>
+              }
+            </div>
+
+            <div class="cat-tabla-list">
+              @for (t of svc.catTablasFiltradas; track t.id) {
+                <div class="cat-tabla-item" [class.za-active]="svc.catTablaActiva?.id === t.id" (click)="svc.seleccionarTabla(t)">
+                  <div class="cat-tabla-left">
+                    <div class="cat-tabla-nombre">{{ t.label }}</div>
+                    <div class="cat-tabla-modulo">{{ t.modulo }}</div>
+                    @if (!t.endpoint) {
+                      <div class="cat-local-badge">local</div>
+                    }
+                  </div>
+                  <div class="cat-tabla-conteo">{{ svc.catConteos[t.id] ?? '—' }}</div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="cat-global-content">
+            @if (svc.catTablaActiva) {
+              <div class="sub-card">
+                <div class="cat-panel-header">
+                  <div>
+                    <div class="sub-card-title" style="margin-bottom:2px">{{ svc.catTablaActiva.label }}</div>
+                    <div class="cat-panel-modulo">Modulo: {{ svc.catTablaActiva.modulo }}</div>
+                    @if (!svc.catTablaActiva.endpoint) {
+                      <div class="cat-local-aviso">Almacenada en este navegador — sin endpoint en el backend aún</div>
+                    }
+                  </div>
+                  <div class="cat-panel-header-right">
+                    <div class="cat-panel-count">
+                      {{ svc.catConteos[svc.catTablaActiva.id] ?? '—' }} registros
+                    </div>
+                    @if (svc.catItems.length > 0) {
+                    <div class="per-page-group">
+                      <label class="filter-label" style="margin-bottom:0">Por pág:</label>
+                      <div class="per-page-row">
+                        <select class="per-page-select" [value]="svc.catPageSize" (change)="svc.onChangeCatSize($event)">
+                          <option [value]="5">5</option><option [value]="10">10</option><option [value]="20">20</option>
+                        </select>
+                        <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSizeCat($event)">
+                      </div>
+                    </div>
+                    }
+                  </div>
+                </div>
+
+                <div class="cat-add-row">
+                  @for (campo of svc.catTablaActiva.campos; track campo.key) {
+                    <input class="input-field" [(ngModel)]="svc.catNuevo[campo.key]"
+                      [placeholder]="campo.label" style="flex:1; min-width:130px"
+                      (keyup.enter)="svc.agregarCat()">
+                  }
+                  <button class="btn btn-primary btn-sm" (click)="svc.agregarCat()">+ Agregar</button>
+                </div>
+
+                @if (svc.loadingCat) {
+                  <div class="td-empty">Cargando...</div>
+                }
+                @if (!svc.loadingCat) {
+                  <div class="cat-list">
+                    @if (svc.catItems.length === 0) {
+                      <div class="cat-empty">Sin registros — agrega el primero arriba</div>
+                    }
+                    @for (item of svc.catPage_data; track item._id) {
+                      <div class="cat-item">
+                        <span class="cat-dot" [style.background]="svc.activeCard!.color"></span>
+                        @if (item.editing) {
+                          @for (campo of svc.catTablaActiva.campos; track campo.key) {
+                            <input class="input-field cat-edit-input" [(ngModel)]="item.editVals[campo.key]"
+                              [placeholder]="campo.label">
+                          }
+                          <button class="btn btn-primary btn-sm" (click)="svc.guardarEditCat(item)">Guardar</button>
+                          <button class="btn btn-secondary btn-sm" (click)="item.editing = false">Cancelar</button>
+                        } @else {
+                          <span class="cat-name">{{ item.display }}</span>
+                          <div class="cat-actions">
+                            <button class="btn-icon-sm" (click)="svc.editarCat(item)">Editar</button>
+                            <button class="btn-icon-sm btn-danger-sm" (click)="svc.eliminarCat(item)">Borrar</button>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                  <!-- Paginacion catalogos -->
+                  @if (svc.catItems.length > 0) {
+                  <div class="za-pag-bar" style="margin-top:8px">
+                    <span class="za-pag-info">{{ svc.catItems.length }} registros</span>
+                    @if (svc.totalPagCat > 1) {
+                    <div class="za-pagination">
+                      <button class="za-page-btn" (click)="svc.catPage=svc.catPage-1" [disabled]="svc.catPage===1">&lsaquo;</button>
+                      @for (p of svc.pagesVisibles(svc.totalPagCat, svc.catPage); track p) {
+                        @if (p === -1) { <span class="za-page-dots">…</span> }
+                        @else { <button class="za-page-btn" [class.za-active]="svc.catPage===p" (click)="svc.catPage=p">{{ p }}</button> }
+                      }
+                      <button class="za-page-btn" (click)="svc.catPage=svc.catPage+1" [disabled]="svc.catPage===svc.totalPagCat">&rsaquo;</button>
+                    </div>
+                    }
+                  </div>
+                  }
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="sub-stats-bar" style="overflow-x:auto">
+          @for (t of svc.catTablas; track t.id) {
+            <div class="sub-stat-item" style="min-width:100px">
+              <span class="sub-stat-n">{{ svc.catConteos[t.id] ?? '—' }}</span>
+              <span class="sub-stat-l">{{ t.label }}</span>
+            </div>
+          }
+        </div>

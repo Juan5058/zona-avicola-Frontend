@@ -1,0 +1,139 @@
+<!-- ══════════════════════════════════
+     MODO MANUAL
+════════════════════════════════════ -->
+<div class="manual-layout">
+
+  <!-- columna izquierda: tarjetas de conteo -->
+  <div class="manual-left">
+    <div class="panel-box">
+      <div class="section-title">{{ svc.formTitle }}</div>
+
+      <div class="cat-grid-manual">
+        @for (c of svc.cats; track c.id) {
+        <div class="cat-card-manual">
+          <div class="cat-name"   [style.color]="c.color">{{ c.label }}</div>
+          <div class="cat-weight">{{ svc.rangoPeso(c) }}</div>
+          <div class="cat-counter">
+            <button class="counter-btn" (click)="svc.cambiarConteo(c.id, -1)">-</button>
+            <input  class="counter-input" type="number" min="0" placeholder="0"
+                    [value]="svc.counts[c.id] ?? ''"
+                    (change)="svc.onInputConteo(c.id, $event)"
+                    (input)="svc.onInputConteo(c.id, $event)">
+            <button class="counter-btn" (click)="svc.cambiarConteo(c.id, 1)">+</button>
+          </div>
+        </div>
+        }
+
+        <!-- tarjeta danados -->
+        <div class="cat-card-manual cat-danados">
+          <div class="cat-name cat-name-danado">Danados</div>
+          <div class="cat-weight">Rotos / sucios</div>
+          <div class="cat-counter">
+            <button class="counter-btn counter-btn-red"
+                    (click)="svc.danados = (svc.danados ?? 0) > 0 ? (svc.danados ?? 0) - 1 : 0">-</button>
+            <input  class="counter-input counter-input-red" type="number" min="0" placeholder="0"
+                    [value]="svc.danados ?? ''"
+                    (change)="svc.onInputDanados($event)"
+                    (input)="svc.onInputDanados($event)">
+            <button class="counter-btn counter-btn-red"
+                    (click)="svc.danados = (svc.danados ?? 0) + 1">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="total-line">
+        Total buenos: <strong>{{ svc.total }}</strong>
+        @if ((svc.danados ?? 0) > 0) {
+        <span class="total-danados"> &mdash; Danados: <strong>{{ svc.danados }}</strong></span>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- columna derecha: panales + formulario -->
+  <div class="manual-right">
+
+    @if (svc.total > 0) {
+    <div class="panel-box panal-box">
+      <div class="panal-box-header">
+        <div class="panal-icono-sm"></div>
+        <div>
+          <div class="panal-completos">
+            {{ svc.panalCompletos }}
+            <span>{{ svc.panalCompletos === 1 ? 'panal' : 'panales' }}</span>
+          </div>
+          <div class="panal-sub">{{ svc.huevosPorPanal }} huevos por panal</div>
+        </div>
+      </div>
+
+      <div class="panal-rows">
+        @for (c of svc.cats; track c.id) {
+        @if ((svc.counts[c.id] ?? 0) > 0) {
+        <div class="panal-row">
+          <span class="panal-row-label" [style.color]="c.color">{{ c.label }}</span>
+          <div class="panal-row-bar-wrap">
+            <div class="panal-row-bar">
+              <div class="panal-row-fill"
+                   [style.width.%]="svc.panalesActuales.porCat[c.id].sobrantes === 0
+                     ? 100
+                     : (svc.panalesActuales.porCat[c.id].sobrantes / svc.huevosPorPanal) * 100"
+                   [style.background]="c.color">
+              </div>
+            </div>
+          </div>
+          <span class="panal-row-n">{{ svc.counts[c.id] }}</span>
+          <span class="panal-row-result">
+            <strong>{{ svc.panalesActuales.porCat[c.id].completos }}p</strong>
+            @if (svc.panalesActuales.porCat[c.id].sobrantes > 0) {
+            <em class="panal-row-sobrante">+{{ svc.panalesActuales.porCat[c.id].sobrantes }}</em>
+            }
+          </span>
+        </div>
+        }
+        }
+      </div>
+    </div>
+    }
+
+    <div class="panel-box">
+      <div class="section-title" style="margin-bottom:14px">Datos del registro</div>
+
+      <div class="two-col-form">
+        <div class="input-group">
+          <label class="input-label">Lote *</label>
+          <select class="input-field" [(ngModel)]="svc.formManual.lote_id">
+            <option value="">Seleccionar...</option>
+            @for (l of svc.lotes; track l.id_lote) {
+            <option [value]="l.id_lote">{{ l.codigo }}</option>
+            }
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label">Jornada *</label>
+          <select class="input-field" [(ngModel)]="svc.formManual.jornada">
+            @for (j of svc.jornadas; track j) {
+            <option [value]="j">{{ j }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label">Fecha</label>
+        <input class="input-field" type="date" [(ngModel)]="svc.formManual.fecha">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Observaciones</label>
+        <textarea class="input-field" [(ngModel)]="svc.formManual.obs" rows="3"></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" (click)="svc.guardarClasificacion()" [disabled]="!svc.puedeGuardar(svc.editId)">
+          {{ svc.editId ? 'Actualizar' : 'Guardar' }}
+        </button>
+        <button class="btn btn-secondary" (click)="svc.setModo('manual')">Limpiar</button>
+      </div>
+    </div>
+
+  </div>
+</div>

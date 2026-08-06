@@ -1,0 +1,367 @@
+<div class="tab-panel">
+
+  <!-- kpis -->
+  <div class="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-val">{{ svc.kpiAlimentos }}</div>
+      <div class="kpi-label">Tipos de alimento</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val kpi-green">{{ svc.kpiStockAlim }}</div>
+      <div class="kpi-label">Stock total</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val">{{ svc.kpiConsumoMes }}</div>
+      <div class="kpi-label">Consumo este mes</div>
+    </div>
+    <div class="kpi-card" [class.kpi-crit-active]="svc.kpiAlimCriticos > 0">
+      <div class="kpi-val" [class.kpi-red]="svc.kpiAlimCriticos > 0">{{ svc.kpiAlimCriticos }}</div>
+      <div class="kpi-label">Alimentos criticos</div>
+    </div>
+  </div>
+
+  <!-- subtab bar -->
+  <div class="subtab-bar">
+    <button class="subtab-btn" [class.za-active]="svc.subTabAlimento==='catalogo'"    (click)="svc.subTabAlimento='catalogo'">Catalogo</button>
+    <button class="subtab-btn" [class.za-active]="svc.subTabAlimento==='movimientos'" (click)="svc.subTabAlimento='movimientos'">Movimientos</button>
+  </div>
+
+  <!-- ── SUBTAB: CATALOGO ── -->
+  @if (svc.subTabAlimento === 'catalogo') {
+  <div class="main-layout">
+
+    <div class="col-forms">
+      <div class="form-section">
+        <div class="form-section-title">{{ svc.alimentoFormTitle }}</div>
+
+        <div class="input-group">
+          <label class="input-label">Nombre *</label>
+          <input class="input-field" [(ngModel)]="svc.alimentoNombre" placeholder="Ej: Concentrado postura, Maiz molido...">
+        </div>
+
+        <div class="two-col-form">
+          <div class="input-group">
+            <label class="input-label">
+              Unidad
+              <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('unidadesAlim','Unidad')" title="Agregar unidad">+</button>
+            </label>
+            <select class="input-field" [(ngModel)]="svc.alimentoUnidad">
+              @for (u of svc.alimentoUnidades; track u) {
+                <option [value]="u">{{ u }}</option>
+              }
+            </select>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Stock Minimo</label>
+            <input class="input-field" type="number" [(ngModel)]="svc.alimentoMin" placeholder="0" min="0">
+          </div>
+        </div>
+
+        <div class="two-col-form">
+          <div class="input-group">
+            <label class="input-label">Costo Unitario</label>
+            <input class="input-field" type="number" [(ngModel)]="svc.alimentoCosto" placeholder="0" min="0">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Proveedor</label>
+            <input class="input-field" [(ngModel)]="svc.alimentoProveedor" placeholder="Opcional">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Observaciones</label>
+          <textarea class="input-field" [(ngModel)]="svc.alimentoObs" rows="2" placeholder="Notas adicionales..."></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" (click)="svc.guardarAlimento()" [disabled]="!svc.puedeGuardar(svc.editAlimentoId)">
+            {{ svc.editAlimentoId ? 'Actualizar' : 'Guardar' }}
+          </button>
+          <button class="btn btn-secondary" (click)="svc.limpiarFormAlimento()">Limpiar</button>
+        </div>
+      </div>
+    </div><!-- /col-forms -->
+
+    <div class="col-tables">
+      <div class="list-section">
+        <div class="section-header-block">
+          <div class="section-header-left">
+            <span class="section-main-title">Alimentos registrados</span>
+          </div>
+        </div>
+        <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Buscar</label>
+    <input class="input-field" [(ngModel)]="svc.alimentoSearch" (input)="svc.filterAlimentos()" placeholder="Nombre del alimento...">
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.alimentoPageSize" (change)="svc.onChange_alimentoSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize('alimento', $event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.alimentoSearch='';svc.filterAlimentos()"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-item">Nombre</th>
+                <th class="col-cat">Unidad</th>
+                <th class="col-stock">Stock Act. / Min.</th>
+                <th class="col-acc-sm">Acc.</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (svc.alimentosFiltered.length === 0) {
+                <tr><td colspan="4" class="empty-cell">Sin alimentos registrados.</td></tr>
+              }
+              @for (a of svc.alimentosPage; track a.id_alimento) {
+                <tr>
+                  <td>
+                    <strong class="item-nombre">{{ a.nombre }}</strong>
+                    <br><small class="badge" [ngClass]="svc.getAlimColorBadge(a)">{{ svc.getAlimEstado(a) }}</small>
+                  </td>
+                  <td>{{ a.unidad || 'kg' }}</td>
+                  <td>
+                    <strong [style.color]="svc.getAlimColor(a)">{{ a.stock_actual || 0 }}</strong>
+                    <br><small class="text-muted">min: {{ a.stock_minimo || 0 }}</small>
+                  </td>
+                  <td>
+                    <div class="td-actions">
+                      <button class="btn btn-secondary btn-xs" (click)="svc.editAlimentoInline(a)" [disabled]="!svc.puedeEditarModulo">Editar</button>
+                      <button class="btn btn-danger   btn-xs" (click)="svc.elimAlimento(a)"        [disabled]="!svc.puedeEliminar">Elim.</button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="za-pag-bar">
+          <span class="za-pag-info">{{ svc.alimentosFiltered.length }} alimentos</span>
+          @if (svc.totalPagAlimentos > 1) {
+            <div class="za-pagination">
+              <button class="za-page-btn" (click)="svc.alimentoPage=svc.alimentoPage-1" [disabled]="svc.alimentoPage===1">&lsaquo;</button>
+              @for (p of svc.pagesVisibles(svc.totalPagAlimentos, svc.alimentoPage); track p) {
+                @if (p === -1) { <span class="za-page-dots">…</span> }
+                @else { <button class="za-page-btn" [class.za-active]="svc.alimentoPage===p" (click)="svc.alimentoPage=p">{{ p }}</button> }
+              }
+              <button class="za-page-btn" (click)="svc.alimentoPage=svc.alimentoPage+1" [disabled]="svc.alimentoPage===svc.totalPagAlimentos">&rsaquo;</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div><!-- /col-tables -->
+
+  </div><!-- /main-layout catalogo alim -->
+  }
+
+  <!-- ── SUBTAB: MOVIMIENTOS ── -->
+  @if (svc.subTabAlimento === 'movimientos') {
+  <div class="main-layout">
+
+    <div class="col-forms">
+      <div class="form-section">
+
+        <!-- toggle entrada / salida -->
+        <div class="mov-toggle">
+          <button class="mov-btn entrada" [class.za-active]="svc.movAlimTipo==='entrada'" (click)="svc.movAlimTipo='entrada'">
+            + Entrada
+          </button>
+          <button class="mov-btn salida"  [class.za-active]="svc.movAlimTipo==='salida'"  (click)="svc.movAlimTipo='salida'">
+            - Salida / Consumo
+          </button>
+        </div>
+
+        <div class="form-section-title">
+          {{ svc.movAlimTipo === 'entrada' ? 'Registrar Entrada de Alimento' : 'Registrar Consumo / Salida' }}
+        </div>
+
+        <!-- alimento seleccionado o selector -->
+        @if (svc.movAlim) {
+          <div class="mov-item-card" (click)="svc.movAlim=null;svc.movAlimId=''">
+            <div class="mov-item-info">
+              <strong>{{ svc.movAlim.nombre }}</strong>
+              <span class="badge badge-gray">{{ svc.movAlim.unidad || 'kg' }}</span>
+            </div>
+            <div class="mov-item-stock">
+              Stock actual: <strong [style.color]="svc.getAlimColor(svc.movAlim)">{{ svc.movAlim.stock_actual || 0 }} {{ svc.movAlim.unidad || 'kg' }}</strong>
+            </div>
+            <small class="mov-item-change">Toca para cambiar alimento</small>
+          </div>
+        } @else {
+          <div class="input-group">
+            <label class="input-label">Alimento *</label>
+            <select class="input-field" [(ngModel)]="svc.movAlimId" (change)="svc.onMovAlimChange()">
+              <option value="">Seleccionar alimento...</option>
+              @for (a of svc.alimentos; track a.id_alimento) {
+                <option [value]="a.id_alimento">{{ a.nombre }} — {{ a.stock_actual || 0 }} {{ a.unidad || 'kg' }}</option>
+              }
+            </select>
+          </div>
+        }
+
+        <!-- campo lote solo en salida -->
+        @if (svc.movAlimTipo === 'salida') {
+          <div class="input-group">
+            <label class="input-label">Lote *</label>
+            <select class="input-field" [(ngModel)]="svc.movAlimLoteId">
+              <option value="">Seleccionar lote...</option>
+              @for (l of svc.lotes; track l.id_lote) {
+                <option [value]="l.id_lote">{{ l.codigo }}</option>
+              }
+            </select>
+          </div>
+        }
+
+        <div class="input-group">
+          <label class="input-label">Cantidad *</label>
+          <input class="input-field" type="number" [(ngModel)]="svc.movAlimCantidad" placeholder="0" min="1">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Fecha</label>
+          <input class="input-field" type="date" [(ngModel)]="svc.movAlimFecha">
+        </div>
+
+        @if (svc.movAlimTipo === 'entrada') {
+          <div class="input-group">
+            <label class="input-label">Observaciones</label>
+            <input class="input-field" [(ngModel)]="svc.movAlimObs" placeholder="Notas...">
+          </div>
+        }
+
+        <div class="form-actions">
+          <button class="btn" [ngClass]="svc.movAlimTipo==='entrada' ? 'btn-success' : 'btn-warning'"
+            (click)="svc.guardarMovAlim()" [disabled]="!svc.puedeGuardar(svc.editMovAlimId)">
+            {{ svc.editMovAlimId ? 'Actualizar' : (svc.movAlimTipo === 'entrada' ? 'Registrar Entrada' : 'Registrar Consumo') }}
+          </button>
+          <button class="btn btn-secondary" (click)="svc.limpiarMovAlim()">Limpiar</button>
+        </div>
+      </div>
+    </div><!-- /col-forms -->
+
+    <div class="col-tables">
+      <div class="list-section">
+        @if (svc.salidaStats) {
+          <div class="consumo-stats">
+            <div class="stat-item">
+              <span>Total consumido</span>
+              <strong>{{ svc.salidaStats.kg }} kg</strong>
+            </div>
+            <div class="stat-item">
+              <span>Costo total</span>
+              <strong>{{ svc.salidaStats.costo }}</strong>
+            </div>
+            <div class="stat-item">
+              <span>Registros</span>
+              <strong>{{ svc.salidaStats.registros }}</strong>
+            </div>
+          </div>
+        }
+
+        <div class="section-header-block">
+          <div class="section-header-left">
+            <span class="section-main-title">Historial de movimientos — Alimento</span>
+          </div>
+        </div>
+        <div class="filter-bar">
+  <div class="filter-group">
+    <label class="filter-label">Tipo</label>
+    <select class="input-field" [(ngModel)]="svc.movAlimFiltroTipo">
+              <option value="">Todos</option>
+              <option value="entrada">Entradas</option>
+              <option value="salida">Salidas</option>
+            </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Alimento</label>
+    <select class="input-field" [(ngModel)]="svc.movAlimFiltroId">
+              <option value="">Todos</option>
+              @for (a of svc.alimentos; track a.id_alimento) { <option [value]="a.id_alimento">{{ a.nombre }}</option> }
+            </select>
+  </div>
+  <div class="per-page-group">
+    <label class="filter-label">Por pág:</label>
+    <div class="per-page-row">
+      <select class="per-page-select" [value]="svc.movAlimPageSize" (change)="svc.onChange_movAlimSize($event)">
+        <option [value]="5">5</option><option [value]="10">10</option><option [value]="15">15</option>
+      </select>
+      <input class="per-page-custom" type="number" min="1" placeholder="Otro" (change)="svc.onCustomSize('svc.movAlim', $event)">
+    </div>
+  </div>
+  <button class="btn-limpiar" (click)="svc.movAlimFiltroTipo='';svc.movAlimFiltroId=''"><span class="icon-close" [innerHTML]="svc.svgClose"></span>Limpiar</button>
+</div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-fecha">Fecha</th>
+                <th class="col-alimento">Alimento</th>
+                <th class="col-cant">Movimiento</th>
+                <th class="col-lote">Lote</th>
+                <th class="col-acc-sm">Acc.</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (svc.movAlimHistorialFiltrado.length === 0) {
+                <tr><td colspan="5" class="empty-cell">Sin movimientos registrados.</td></tr>
+              }
+              @for (r of svc.movAlimHistorialPage; track r._id) {
+                <tr>
+                  <td class="fecha-cell">{{ svc.fmtDate(r.fecha) }}</td>
+                  <td>{{ r.alimento }}</td>
+                  <td>
+                    @if (r.tipo === 'entrada') {
+                      <strong class="kpi-green">+{{ r.cantidad }}</strong>
+                    } @else {
+                      <strong class="kpi-orange">-{{ r.cantidad }}</strong>
+                    }
+                    <br><small class="badge" [ngClass]="r.tipo==='entrada' ? 'badge-green' : 'badge-orange'">{{ r.tipo }}</small>
+                  </td>
+                  <td>
+                    @if (r.lote) {
+                      <span class="badge badge-green">{{ r.lote }}</span>
+                    } @else {
+                      <span class="text-muted">—</span>
+                    }
+                  </td>
+                  <td>
+                    <div class="td-actions">
+                      <button class="btn btn-secondary btn-xs" (click)="svc.editMovAlim(r)"  [disabled]="!svc.puedeEditarModulo">Editar</button>
+                      <button class="btn btn-danger   btn-xs" (click)="svc.elimMovAlim(r)"   [disabled]="!svc.puedeEliminar">Elim.</button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="za-pag-bar">
+          <span class="za-pag-info">{{ svc.movAlimHistorialFiltrado.length }} registros</span>
+          @if (svc.totalPagMovAlim > 1) {
+            <div class="za-pagination">
+              <button class="za-page-btn" (click)="svc.movAlimPage=svc.movAlimPage-1" [disabled]="svc.movAlimPage===1">&lsaquo;</button>
+              @for (p of svc.pagesVisibles(svc.totalPagMovAlim, svc.movAlimPage); track p) {
+                @if (p === -1) { <span class="za-page-dots">…</span> }
+                @else { <button class="za-page-btn" [class.za-active]="svc.movAlimPage===p" (click)="svc.movAlimPage=p">{{ p }}</button> }
+              }
+              <button class="za-page-btn" (click)="svc.movAlimPage=svc.movAlimPage+1" [disabled]="svc.movAlimPage===svc.totalPagMovAlim">&rsaquo;</button>
+            </div>
+          }
+        </div>
+      </div>
+    </div><!-- /col-tables -->
+
+  </div><!-- /main-layout movimientos alim -->
+  }
+
+</div><!-- /tab alimento -->

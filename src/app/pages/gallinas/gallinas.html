@@ -1,0 +1,169 @@
+<!-- ══════════ MÓDULO GALLINAS ══════════ -->
+
+<!-- Tab bar (submodulos) -->
+<div class="tab-bar">
+  <button class="tab-btn" [class.za-active]="svc.activeTab==='lotes'" (click)="svc.setTab('lotes')">Lotes</button>
+  <button class="tab-btn" [class.za-active]="svc.activeTab==='tratamiento'"
+    (click)="svc.setTab('tratamiento')">Tratamiento</button>
+  <button class="tab-btn" [class.za-active]="svc.activeTab==='mortalidad'" (click)="svc.setTab('mortalidad')">Mortalidad</button>
+  <button class="tab-btn" [class.za-active]="svc.activeTab==='ventas'" (click)="svc.setTab('ventas')">Ventas</button>
+</div>
+
+<!-- Alertas de tratamientos vencidos o próximos — se muestran debajo del tab-bar -->
+@if (svc.alertasTrat.length > 0) {
+<div class="alertas-bar">
+  @for (a of svc.alertasTrat; track a.med) {
+  <div class="alerta-item" [class.vencido]="a.estado==='vencido'" [class.urgente]="a.estado==='urgente'">
+    <!-- Ícono SVG en lugar de emoji -->
+    <span class="alerta-icon">
+      @if (a.estado === 'vencido') {
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+      } @else {
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+      }
+    </span>
+    <span>
+      <strong>{{ a.lote }}</strong> — medicamento: <em>{{ a.med || 'sin especificar' }}</em>.
+      Próxima dosis {{ a.estado === 'vencido' ? 'VENCIDA' : 'vence en los próximos 3 días' }}
+      ({{ svc.fmtDate(a.proxima) }})
+    </span>
+  </div>
+  }
+</div>
+}
+
+<!-- ══════════ CONTENIDO DE PESTAÑA ACTIVA (subcomponentes) ══════════ -->
+@if (svc.activeTab==='lotes') { <app-gallinas-lotes /> }
+@if (svc.activeTab==='tratamiento') { <app-gallinas-tratamiento /> }
+@if (svc.activeTab==='mortalidad') { <app-gallinas-mortalidad /> }
+@if (svc.activeTab==='ventas') { <app-gallinas-ventas /> }
+
+<!-- ══════════ MODAL: HISTORIAL DE LOTE ══════════ -->
+<div class="modal-overlay" [class.show]="svc.historialVisible" (click)="svc.historialVisible=false">
+  <div class="modal-box modal-lg" (click)="$event.stopPropagation()">
+    @if (svc.historialLote) {
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Historial — {{ svc.historialLote.id }}</div>
+        <div class="modal-subtitle">
+          {{ svc.historialLote.raza }} &middot; {{ svc.fmtNum(svc.historialLote.cant) }} ingresadas &middot;
+          <span class="text-success fw-bold">{{ svc.fmtNum(svc.avesVivas(svc.historialLote)) }} vivas</span>
+        </div>
+      </div>
+      <button class="modal-close" (click)="svc.historialVisible=false">&#x2715;</button>
+    </div>
+
+    <!-- Tratamientos del lote -->
+    <div class="modal-section-title">Tratamientos ({{ svc.historialTrats.length }})</div>
+    @if (svc.historialTrats.length === 0) {
+    <p class="empty-hint">Sin tratamientos registrados.</p>
+    } @else {
+    <div style="overflow:auto;margin-bottom:16px">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Medicamento</th>
+            <th>Fecha</th>
+            <th>Próxima</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (t of svc.historialTrats; track t._id) {
+          <tr>
+            <td><span class="badge badge-blue">{{ t.tipo }}</span></td>
+            <td>{{ t.med }}</td>
+            <td>{{ svc.fmtDate(t.fecha) }}</td>
+            <td>{{ t.proxima ? svc.fmtDate(t.proxima) : '—' }}</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+
+    <!-- Bajas del lote -->
+    <div class="modal-section-title">Bajas ({{ svc.historialMorts.length }} registros · {{ svc.historialMortTotal }} aves)</div>
+    @if (svc.historialMorts.length === 0) {
+    <p class="empty-hint">Sin bajas registradas.</p>
+    } @else {
+    <div style="overflow:auto">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Cantidad</th>
+            <th>Causa</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of svc.historialMorts; track m._id) {
+          <tr>
+            <td>{{ svc.fmtDate(m.fecha) }}</td>
+            <td><strong class="text-danger">{{ m.cant }}</strong></td>
+            <td>{{ m.causa }}</td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+
+    <div class="modal-footer" style="margin-top:20px">
+      <button class="btn btn-secondary" (click)="svc.historialVisible=false">Cerrar</button>
+    </div>
+    }
+  </div>
+</div>
+
+<!-- ══════════ MODAL: GESTIONAR OPCIONES ══════════ -->
+<div class="modal-overlay" [class.show]="svc.addOpcionVisible" (click)="svc.addOpcionVisible=false">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    <div class="modal-title">Gestionar {{ svc.addOpcionLabel }}</div>
+
+    <!-- Lista de opciones actuales con opción de eliminar cada una -->
+    <div style="margin-top:14px;margin-bottom:4px">
+      <label class="input-label">Opciones actuales</label>
+    </div>
+    <div class="opciones-lista">
+      @for (o of svc.getOpciones(svc.addOpcionKey); track o) {
+      <div class="opcion-item">
+        <span>{{ o }}</span>
+        <button class="btn-del-opcion" (click)="svc.eliminarOpcion(svc.addOpcionKey, o)" title="Eliminar">&#x2715;</button>
+      </div>
+      }
+    </div>
+
+    <!-- Campo para agregar nueva opción -->
+    <div class="input-group">
+      <label class="input-label">Agregar nueva opción</label>
+      <input class="input-field" [(ngModel)]="svc.addOpcionNuevo" [placeholder]="'Nueva ' + svc.addOpcionLabel"
+        (keydown.enter)="svc.confirmarAddOpcion()">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="svc.addOpcionVisible=false">Cerrar</button>
+      <button class="btn btn-primary" (click)="svc.confirmarAddOpcion()">Agregar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: CONFIRMACIÓN DE ELIMINACIÓN ══════════ -->
+<div class="modal-overlay" [class.show]="svc.confirmVisible" (click)="svc.confirmNo()">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    <div class="modal-title">Confirmar acción</div>
+    <p class="confirm-msg" [innerHTML]="svc.confirmMsg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="svc.confirmNo()">Cancelar</button>
+      <button class="btn btn-danger" (click)="svc.confirmYes()">Eliminar</button>
+    </div>
+  </div>
+</div>

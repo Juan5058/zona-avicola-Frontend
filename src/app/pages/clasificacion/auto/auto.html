@@ -1,0 +1,263 @@
+<!-- ══════════════════════════════════
+     MODO AUTOMATICO
+════════════════════════════════════ -->
+<div class="clasi-grid">
+
+  <!-- panel izquierdo: camara + resultado de captura -->
+  <div class="cam-panel">
+    <div class="section-title">Camara de Clasificacion</div>
+
+    <!-- estado del servidor Python -->
+    @if (svc.verificandoServer) {
+    <div class="ia-status ia-verificando">Verificando servidor de vision...</div>
+    } @else if (svc.servidorActivo) {
+    <div class="ia-status ia-ok">Servidor activo — peso LCD + medicion por hoja milimetrada</div>
+    } @else {
+    <div class="ia-status ia-warn">
+      Servidor no disponible —
+      <span class="ia-hint">ejecuta: <code>python server.py</code></span>
+      <button class="btn-reintentar" (click)="svc.verificarServidor()">Reintentar</button>
+    </div>
+    }
+
+    <!-- Selector de camara -->
+    <div class="cam-selector-row">
+      @if (svc.cargandoCamaras) {
+      <span class="cam-cargando">Buscando camaras...</span>
+      } @else if (svc.camarasDisponibles.length === 0) {
+      <span class="cam-cargando">Sin camaras detectadas —
+        <button class="btn-reintentar" (click)="svc.cargarCamaras()">Reintentar</button>
+      </span>
+      } @else {
+      <div class="cam-selector-wrap">
+        <select class="cam-select" [(ngModel)]="svc.camaraSeleccionadaId" (change)="svc.cambiarCamara()">
+          @for (cam of svc.camarasDisponibles; track cam.deviceId; let i = $index) {
+          <option [value]="cam.deviceId">{{ svc.labelCamara(cam, i) }}</option>
+          }
+        </select>
+      </div>
+      <button class="btn-refresh" (click)="svc.cargarCamaras()" title="Actualizar lista">↺</button>
+      }
+    </div>
+
+    <!-- atajo Enter -->
+    @if (svc.camActive) {
+    <div class="enter-hint">
+      Presiona <kbd>Enter</kbd> para
+      @if (svc.showCaptura) { aceptar el resultado } @else { capturar }
+    </div>
+    }
+
+    <!-- visor de video -->
+    <div class="cam-box" [class.cam-procesando]="svc.procesando">
+      <video id="cam-video" autoplay playsinline style="display:none"></video>
+      <canvas id="cam-live"
+              [style.display]="svc.camActive ? 'block' : 'none'"
+              style="width:100%;height:100%;object-fit:cover;display:block;">
+      </canvas>
+      <canvas id="cam-canvas" style="display:none"></canvas>
+
+      @if (!svc.camActive) {
+      <div class="cam-overlay">
+        <p class="cam-hint">Camara no iniciada</p>
+      </div>
+      }
+      @if (svc.procesando) {
+      <div class="cam-overlay cam-overlay-procesando">
+        <div class="spinner"></div>
+        <p class="cam-hint">Analizando...</p>
+      </div>
+      }
+    </div>
+
+    <!-- controles de camara -->
+    <div class="cam-actions">
+      @if (!svc.camActive) {
+      <button class="btn btn-primary"
+              (click)="svc.iniciarCamara()"
+              [disabled]="svc.camarasDisponibles.length === 0">
+        Iniciar Camara
+      </button>
+      }
+      @if (svc.camActive) {
+      <button class="btn btn-danger"    (click)="svc.detenerCamara()">Detener</button>
+      <button class="btn btn-secondary" (click)="svc.capturarYClasificar()" [disabled]="svc.procesando">
+        Capturar
+      </button>
+      }
+    </div>
+
+    <!-- ══ RESULTADO DE LA CAPTURA ══════════════════════════════════════ -->
+    @if (svc.showCaptura) {
+    <div class="captura-result">
+
+      <!-- imagen con la elipse dibujada por el servidor -->
+      <img [src]="svc.capturaImg" alt="Captura del huevo con elipse de medicion">
+
+      <!-- categoria grande con color -->
+      <div class="captura-cat" [style.color]="svc.getCatColor(svc.capturaCat)">
+        {{ svc.capturaCat }}
+      </div>
+
+      <!-- ★ DATOS CLAVE: Peso · Volumen · Ejes -->
+      <div class="captura-datos">
+
+        <!-- PESO — prioridad maxima -->
+        <div class="dato-item dato-peso"
+             [class.dato-highlight]="svc.capturaConfianza === 'peso'">
+          <span class="dato-label">
+            Peso
+            @if (svc.capturaConfianza === 'peso') {
+            <span class="badge-fuente badge-bascula">Bascula</span>
+            }
+          </span>
+          <span class="dato-val">
+            @if (svc.capturaPeso !== null) { {{ svc.capturaPeso }} g }
+            @else { — }
+          </span>
+        </div>
+
+        <!-- VOLUMEN -->
+        <div class="dato-item dato-vol"
+             [class.dato-highlight]="svc.capturaConfianza === 'volumen'">
+          <span class="dato-label">
+            Volumen
+            @if (svc.capturaConfianza === 'volumen') {
+            <span class="badge-fuente badge-vision">Vision</span>
+            }
+          </span>
+          <span class="dato-val">{{ svc.capturaVol }} cm³</span>
+        </div>
+
+        <!-- EJES -->
+        @if (svc.capturaEjeMayor > 0) {
+        <div class="dato-item">
+          <span class="dato-label">Eje mayor</span>
+          <span class="dato-val">{{ svc.capturaEjeMayor }} mm</span>
+        </div>
+        <div class="dato-item">
+          <span class="dato-label">Eje menor</span>
+          <span class="dato-val">{{ svc.capturaEjeMenor }} mm</span>
+        </div>
+        }
+
+        <!-- FUENTE DE CLASIFICACION -->
+        <div class="dato-item dato-fuente-row">
+          <span class="dato-label">Clasificado por</span>
+          <span class="dato-val dato-fuente"
+                [class.fuente-peso]="svc.capturaConfianza === 'peso'"
+                [class.fuente-vision]="svc.capturaConfianza === 'volumen'"
+                [class.fuente-estimado]="svc.capturaConfianza === 'estimado'">
+            {{ svc.labelConfianza(svc.capturaConfianza) }}
+          </span>
+        </div>
+
+      </div><!-- /captura-datos -->
+
+      @if (svc.capturaError) {
+      <div class="captura-aviso">{{ svc.capturaError }}</div>
+      }
+
+      <div class="captura-actions">
+        <button class="btn btn-primary   btn-sm" (click)="svc.aceptarCaptura()">
+          ✓ Aceptar (Enter)
+        </button>
+        <button class="btn btn-secondary btn-sm" (click)="svc.showCaptura = false">
+          Descartar
+        </button>
+      </div>
+
+    </div><!-- /captura-result -->
+    }
+
+  </div><!-- /cam-panel -->
+
+  <!-- panel derecho: conteo + formulario -->
+  <div class="count-panel">
+    <div class="section-title">{{ svc.formTitle }}</div>
+
+    <div class="auto-notice">
+      El conteo sube al aceptar cada captura. No se permite entrada manual en este modo.
+    </div>
+
+    <!-- tarjetas de categoria: solo lectura -->
+    <div class="cat-grid">
+      @for (c of svc.cats; track c.id) {
+      <div class="cat-card">
+        <div class="cat-name"   [style.color]="c.color">{{ c.label }}</div>
+        <div class="cat-weight">{{ svc.rangoPeso(c) }}</div>
+        <div class="cat-counter readonly">
+          <span class="counter-num">{{ svc.counts[c.id] ?? 0 }}</span>
+        </div>
+      </div>
+      }
+    </div>
+
+    <!-- resumen de panales -->
+    @if (svc.total > 0) {
+    <div class="panal-card">
+      <div class="panal-icon-col">
+        <div class="panal-icono"></div>
+      </div>
+      <div class="panal-info">
+        <div class="panal-completos">
+          {{ svc.panalCompletos }}
+          <span>{{ svc.panalCompletos === 1 ? 'panal' : 'panales' }}</span>
+        </div>
+        <div class="panal-desglose">
+          @for (c of svc.cats; track c.id) {
+          @if ((svc.counts[c.id] ?? 0) > 0) {
+          <span class="panal-cat-tag" [style.color]="c.color">
+            {{ c.label }}: {{ svc.panalesActuales.porCat[c.id].completos }}p
+            @if (svc.panalesActuales.porCat[c.id].sobrantes > 0) {
+            <em>+{{ svc.panalesActuales.porCat[c.id].sobrantes }}</em>
+            }
+          </span>
+          }
+          }
+        </div>
+      </div>
+    </div>
+    }
+
+    <div class="total-line">Total: <strong>{{ svc.total }}</strong> huevos</div>
+
+    <!-- formulario -->
+    <div class="form-fields">
+      <div class="two-col-form">
+        <div class="input-group">
+          <label class="input-label">Lote *</label>
+          <select class="input-field" [(ngModel)]="svc.formAuto.lote_id">
+            <option value="">Seleccionar...</option>
+            @for (l of svc.lotes; track l.id_lote) {
+            <option [value]="l.id_lote">{{ l.codigo }}</option>
+            }
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label">Jornada *</label>
+          <select class="input-field" [(ngModel)]="svc.formAuto.jornada">
+            @for (j of svc.jornadas; track j) {
+            <option [value]="j">{{ j }}</option>
+            }
+          </select>
+        </div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Fecha</label>
+        <input class="input-field" type="date" [(ngModel)]="svc.formAuto.fecha">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Observaciones</label>
+        <textarea class="input-field" [(ngModel)]="svc.formAuto.obs" rows="2"></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" (click)="svc.guardarClasificacion()" [disabled]="!svc.puedeGuardar(svc.editId)">
+          {{ svc.editId ? 'Actualizar' : 'Guardar' }}
+        </button>
+        <button class="btn btn-secondary" (click)="svc.setModo('auto')">Limpiar</button>
+      </div>
+    </div>
+  </div><!-- /count-panel -->
+
+</div><!-- /clasi-grid -->

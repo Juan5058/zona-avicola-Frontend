@@ -1,0 +1,51 @@
+<!-- ── TAB BAR PRINCIPAL ── -->
+<div class="tab-bar">
+  <button class="tab-btn" [class.za-active]="svc.activeTab==='general'" (click)="svc.setTab('general')">
+    Inventario General
+  </button>
+  <button class="tab-btn" [class.za-active]="svc.activeTab==='alimento'" (click)="svc.setTab('alimento')">
+    Gestion de Alimento
+  </button>
+</div>
+
+<!-- ══════════ CONTENIDO DE TAB ACTIVA (subcomponentes) ══════════ -->
+@if (svc.activeTab==='general') { <app-inventario-general /> }
+@if (svc.activeTab==='alimento') { <app-inventario-alimento /> }
+
+<!-- modal gestionar categorias / unidades -->
+<div class="modal-overlay" [class.show]="svc.addOpcionVisible" (click)="svc.addOpcionVisible=false">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    <div class="modal-title">Gestionar {{ svc.addOpcionLabel }}</div>
+    <div style="margin:12px 0 4px"><label class="input-label">Opciones actuales</label></div>
+    <div class="opciones-lista">
+      @for (o of svc.getOpcionesModal(); track o) {
+        <div class="opcion-item">
+          <span>{{ o }}</span>
+          <button class="btn-del-opcion" (click)="svc.eliminarOpcionModal(o)">x</button>
+        </div>
+      }
+    </div>
+    <div class="input-group">
+      <label class="input-label">Nueva opcion</label>
+      <input class="input-field" [(ngModel)]="svc.addOpcionNuevo"
+        [placeholder]="'Nueva ' + svc.addOpcionLabel"
+        (keydown.enter)="svc.confirmarAddOpcion()">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="svc.addOpcionVisible=false">Cerrar</button>
+      <button class="btn btn-primary" (click)="svc.confirmarAddOpcion()">Agregar</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal confirmacion -->
+<div class="modal-overlay" [class.show]="svc.confirmVisible" (click)="svc.confirmNo()">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    <div class="modal-title">Confirmar accion</div>
+    <p class="confirm-msg" [innerHTML]="svc.confirmMsg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="svc.confirmNo()">Cancelar</button>
+      <button class="btn btn-danger"    (click)="svc.confirmYes()">Confirmar</button>
+    </div>
+  </div>
+</div>
