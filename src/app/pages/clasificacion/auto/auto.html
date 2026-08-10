@@ -7,18 +7,30 @@
   <div class="cam-panel">
     <div class="section-title">Camara de Clasificacion</div>
 
-    <!-- estado del servidor Python -->
-    @if (svc.verificandoServer) {
-    <div class="ia-status ia-verificando">Verificando servidor de vision...</div>
-    } @else if (svc.servidorActivo) {
-    <div class="ia-status ia-ok">Servidor activo — peso LCD + medicion por hoja milimetrada</div>
+    <!-- estado del lector de peso (OCR en el navegador) -->
+    @if (svc.ocrCargando) {
+    <div class="ia-status ia-verificando">Cargando lector de peso (OCR)...</div>
+    } @else if (svc.leyendoPeso) {
+    <div class="ia-status ia-ok">
+      Leyendo bascula en vivo
+      @if (svc.pesoLive !== null) { — <strong>{{ svc.pesoLive }} g</strong> }
+      @else { — sin lectura aun }
+    </div>
     } @else {
     <div class="ia-status ia-warn">
-      Servidor no disponible —
-      <span class="ia-hint">ejecuta: <code>python server.py</code></span>
-      <button class="btn-reintentar" (click)="svc.verificarServidor()">Reintentar</button>
+      Lector de peso inactivo —
+      <span class="ia-hint">inicia la camara para comenzar a leer la bascula</span>
     </div>
     }
+    @if (svc.leyendoPeso && svc.pesoTexto) {
+    <div class="ia-hint">OCR crudo: "{{ svc.pesoTexto }}"</div>
+    }
+
+    <!-- El recuadro del visor LCD queda fijo con lo que ya esta calibrado
+         (guardado en el navegador) — se quito el arrastre y el panel de
+         ajuste por numeros para no tener que tocarlo cada vez. Si en algun
+         momento hay que recalibrar, svc.roiLcd se puede volver a exponer
+         aqui o editar directo en el service. -->
 
     <!-- Selector de camara -->
     <div class="cam-selector-row">
@@ -49,13 +61,43 @@
     }
 
     <!-- visor de video -->
-    <div class="cam-box" [class.cam-procesando]="svc.procesando">
+    <div class="cam-box" #camBox
+         [class.cam-procesando]="svc.procesando">
       <video id="cam-video" autoplay playsinline style="display:none"></video>
       <canvas id="cam-live"
               [style.display]="svc.camActive ? 'block' : 'none'"
               style="width:100%;height:100%;object-fit:cover;display:block;">
       </canvas>
       <canvas id="cam-canvas" style="display:none"></canvas>
+
+      @if (svc.camActive) {
+      <div class="peso-overlay" [class.peso-overlay-sinlectura]="svc.pesoLive === null">
+        @if (svc.pesoLive !== null) { {{ svc.pesoLive }} g }
+        @else { — g }
+      </div>
+      }
+      <!-- Se quito el badge con el texto crudo (auto [...] [build ...]) que
+           iba pegado encima del video: quedaba feo, y ya esta el mismo
+           contenido en la linea "OCR crudo" de mas arriba y en la
+           miniatura de depuracion de abajo — no hacia falta un tercer
+           lugar mostrando lo mismo. -->
+      @if (svc.camActive && svc.debugImgUrl) {
+      <div style="position:absolute; bottom:8px; right:8px; z-index:5; background:rgba(0,0,0,.65); padding:4px; border-radius:4px;">
+        <img [src]="svc.debugImgUrl" alt="Recorte binarizado con manchas detectadas"
+             style="max-width:160px; max-height:90px; image-rendering:pixelated; display:block;">
+        <span style="color:#fff; font-size:10px; display:block; text-align:center; margin-top:2px;">recorte + manchas detectadas</span>
+      </div>
+      }
+
+      @if (svc.camActive) {
+      <div class="roi-overlay"
+           [style.left]="(svc.roiLcd.x1 * 100) + '%'"
+           [style.top]="(svc.roiLcd.y1 * 100) + '%'"
+           [style.width]="((svc.roiLcd.x2 - svc.roiLcd.x1) * 100) + '%'"
+           [style.height]="((svc.roiLcd.y2 - svc.roiLcd.y1) * 100) + '%'">
+        <span class="roi-overlay-label">LCD</span>
+      </div>
+      }
 
       @if (!svc.camActive) {
       <div class="cam-overlay">
