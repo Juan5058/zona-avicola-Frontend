@@ -279,6 +279,15 @@ $red-border:   #ffcdd2;
 
 .captura-actions { display: flex; gap: 8px; }
 
+// destello breve al guardar (Enter) para confirmar visualmente el registro
+.captura-guardando {
+  animation: flash-guardado 0.5s ease;
+}
+@keyframes flash-guardado {
+  0%   { background: #c8f2cc; border-color: $green-dark; }
+  100% { background: #f0fbf1; border-color: $green-main; }
+}
+
 // ─── Panel camara ────────────────────────────────────────────────────────────
 
 .cam-panel {

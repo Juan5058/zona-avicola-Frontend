@@ -43,9 +43,16 @@
     <!-- atajo Enter -->
     @if (svc.camActive) {
     <div class="enter-hint">
-      Presiona <kbd>Enter</kbd> para
-      @if (svc.showCaptura) { aceptar el resultado } @else { capturar }
+      Presiona <kbd>Espacio</kbd> o <kbd>Enter</kbd> para guardar la lectura actual
     </div>
+    @if (svc.roi) {
+    <div class="enter-hint">
+      El recuadro <strong style="color:#ff1744">rojo</strong> marca donde debe caer el display de la bascula
+      <button class="btn-reintentar" (click)="svc.cargarRoi()" title="Recargar tras recalibrar roi_config.json">
+        Refrescar calibracion
+      </button>
+    </div>
+    }
     }
 
     <!-- visor de video -->
@@ -81,22 +88,20 @@
       }
       @if (svc.camActive) {
       <button class="btn btn-danger"    (click)="svc.detenerCamara()">Detener</button>
-      <button class="btn btn-secondary" (click)="svc.capturarYClasificar()" [disabled]="svc.procesando">
-        Capturar
+      <button class="btn btn-secondary" (click)="svc.capturarYClasificar()" [disabled]="svc.procesando"
+              title="Forzar una lectura inmediata (respaldo manual)">
+        Actualizar lectura
       </button>
       }
     </div>
 
-    <!-- ══ RESULTADO DE LA CAPTURA ══════════════════════════════════════ -->
-    @if (svc.showCaptura) {
-    <div class="captura-result">
-
-      <!-- imagen con la elipse dibujada por el servidor -->
-      <img [src]="svc.capturaImg" alt="Captura del huevo con elipse de medicion">
+    <!-- ══ LECTURA EN VIVO — siempre visible mientras la camara esta prendida ══ -->
+    @if (svc.camActive) {
+    <div class="captura-result" [class.captura-guardando]="svc.guardando">
 
       <!-- categoria grande con color -->
       <div class="captura-cat" [style.color]="svc.getCatColor(svc.capturaCat)">
-        {{ svc.capturaCat }}
+        {{ svc.capturaCat || 'Esperando lectura...' }}
       </div>
 
       <!-- ★ DATOS CLAVE: Peso · Volumen · Ejes -->
@@ -159,11 +164,8 @@
       }
 
       <div class="captura-actions">
-        <button class="btn btn-primary   btn-sm" (click)="svc.aceptarCaptura()">
-          ✓ Aceptar (Enter)
-        </button>
-        <button class="btn btn-secondary btn-sm" (click)="svc.showCaptura = false">
-          Descartar
+        <button class="btn btn-primary btn-sm" (click)="svc.aceptarCaptura()" [disabled]="!svc.capturaCat">
+          ✓ Guardar (Espacio)
         </button>
       </div>
 

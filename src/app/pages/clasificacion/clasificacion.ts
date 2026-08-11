@@ -47,10 +47,11 @@ export class ClasificacionComponent implements OnInit, OnDestroy {
   @HostListener('document:keydown', ['$event'])
   onKeydown(e: Event) {
     const ke  = e as KeyboardEvent;
-    if (ke.key !== 'Enter') return;
+    if (ke.key !== 'Enter' && ke.key !== ' ' && ke.code !== 'Space') return;
     const tag = (ke.target as HTMLElement).tagName;
     if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(tag)) return;
     if (this.svc.modo === 'auto' && this.svc.camActive && !this.svc.procesando) {
+      // el espacio hace scroll por defecto en el navegador — lo bloqueamos
       ke.preventDefault();
       this.svc.onEnter();
     }

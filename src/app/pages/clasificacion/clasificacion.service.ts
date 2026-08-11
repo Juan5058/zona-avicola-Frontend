@@ -8,6 +8,7 @@
 // Enter = capturar + aceptar inmediatamente en modo auto.
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../services/api';
 import { ToastService } from '../../services/toast';
 import { AuthService } from '../../services/auth';
@@ -26,7 +27,13 @@ export const CATS: CatDef[] = [
 export const JORNADAS = ['Manana', 'Tarde'] as const;
 export const HUEVOS_POR_PANAL = 30;
 
-const PYTHON_API = 'http://127.0.0.1:8000';
+const PYTHON_API = 'http://127.0.0.1:8001';
+
+// Resolucion con la que se calibro roi_config.json (python debug_recorte.py
+// confirmo 640x480). La camara del navegador pide 1280x720, asi que el
+// contorno rojo se reescala proporcionalmente a la resolucion real del canvas.
+const ROI_CALIB_W = 640;
+const ROI_CALIB_H = 480;
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -58,7 +65,20 @@ export interface RegistroHist {
   counts: Record<string, number>;
 }
 
-// Respuesta del servidor Python — COMPLETA con frame_anotado
+// Geometria de la elipse ajustada al huevo, en pixeles del MISMO frame que
+// se envio a /clasificar (misma resolucion que el canvas cam-live, no hace
+// falta reescalar como con el ROI).
+export interface RespuestaElipse {
+  cx: number;
+  cy: number;
+  ancho_px: number;
+  alto_px: number;
+  angulo_deg: number;
+  largo_cm: number;
+  diametro_cm: number;
+}
+
+// Respuesta del servidor Python
 interface RespuestaVision {
   categoria:     string;
   peso_g:        number | null;
@@ -67,10 +87,16 @@ interface RespuestaVision {
   eje_menor_mm:  number;
   confianza:     'peso' | 'volumen' | 'estimado';
   error:         string | null;
-  frame_anotado: string | null;   // JPEG base64 con elipse + medidas dibujadas
+  elipse:        RespuestaElipse | null;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// Respuesta del endpoint /roi — coordenadas del recuadro calibrado
+interface RespuestaRoi {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 export function rangoPeso(c: CatDef): string {
   return c.pesoMax === Infinity ? `>${c.pesoMin}g` : `${c.pesoMin}–${c.pesoMax}g`;
@@ -141,8 +167,12 @@ export class ClasificacionService {
   servidorActivo    = false;
   verificandoServer = false;
 
-  // ── Resultado de la ultima captura ───────────────────────────────────────
-  capturaImg:       string       = '';   // base64 — puede ser frame_anotado
+  // ── ROI de calibracion (contorno rojo sobre la vista en vivo) ───────────
+  roi: { x: number; y: number; w: number; h: number } | null = null;
+
+  // ── Lectura en vivo (bascula + vision) ───────────────────────────────────
+  // Se actualiza sola cada ~800ms mientras la camara esta prendida, no
+  // depende de darle clic a "Capturar".
   capturaCat:       string       = '';
   capturaPeso:      number | null = null;
   capturaVol:       number       = 0;
@@ -150,8 +180,15 @@ export class ClasificacionService {
   capturaEjeMenor:  number       = 0;
   capturaConfianza: 'peso' | 'volumen' | 'estimado' = 'volumen';
   capturaError:     string | null = null;
-  showCaptura       = false;
-  procesando        = false;
+  // geometria de la elipse del huevo — se dibuja sobre el MISMO canvas del
+  // video en vivo (junto al recuadro rojo), no en una imagen aparte
+  elipseHuevo:      RespuestaElipse | null = null;
+  procesando        = false;   // true durante la captura manual (boton "Capturar")
+  guardando         = false;   // feedback visual breve al aceptar con Enter
+
+  private liveTimerId: number | null = null;
+  private consultando  = false;          // evita solapar peticiones al servidor
+  private ultimoPesoGuardado: number | null = null;   // anti-duplicado
 
   // ── Modal confirmacion ───────────────────────────────────────────────────
   confirmVisible = false;
@@ -188,8 +225,8 @@ export class ClasificacionService {
   }
 
   onEnter() {
-    if (this.modo === 'auto' && this.camActive && !this.procesando) {
-      this.showCaptura ? this.aceptarCaptura() : this.capturarYClasificar();
+    if (this.modo === 'auto' && this.camActive && !this.guardando && this.capturaCat) {
+      this.aceptarCaptura();
     }
   }
 
@@ -206,8 +243,10 @@ export class ClasificacionService {
     this.danados    = null;
     this.editId     = null;
     this.formTitle  = 'Conteo por Categoria';
-    this.showCaptura = false;
-    this.capturaImg  = '';
+    this.capturaCat  = '';
+    this.capturaPeso = null;
+    this.elipseHuevo = null;
+    this.ultimoPesoGuardado = null;
   }
 
   // ─── Totales y panales ──────────────────────────────────────────────────
@@ -446,11 +485,21 @@ export class ClasificacionService {
       next: () => {
         this.servidorActivo   = true;
         this.verificandoServer = false;
+        this.cargarRoi();
       },
       error: () => {
         this.servidorActivo   = false;
         this.verificandoServer = false;
       },
+    });
+  }
+
+  /** Trae el ROI calibrado (roi_config.json) para dibujar el contorno rojo
+   * sobre la vista en vivo. Se puede volver a llamar tras recalibrar. */
+  cargarRoi() {
+    this.http.get<RespuestaRoi>(`${PYTHON_API}/roi`).subscribe({
+      next: (r) => (this.roi = r),
+      error: () => (this.roi = null),
     });
   }
 
@@ -502,6 +551,8 @@ export class ClasificacionService {
         };
       }
       this.camActive = true;
+      if (this.servidorActivo) this.cargarRoi();
+      this.iniciarLoopClasificacion();
     } catch (e: any) {
       this.toast.error('No se pudo acceder a la camara: ' + e.message);
     }
@@ -517,10 +568,82 @@ export class ClasificacionService {
         canvas.width  = video.videoWidth  || 1280;
         canvas.height = video.videoHeight || 720;
         ctx?.drawImage(video, 0, 0);
+
+        // ── contorno rojo: aqui debe caer el display de la bascula ──
+        if (ctx && this.roi) {
+          // roi_config.json se calibro a 640x480 (python); reescalamos
+          // proporcionalmente a la resolucion real del canvas (ej. 1280x720)
+          const escalaX = canvas.width  / ROI_CALIB_W;
+          const escalaY = canvas.height / ROI_CALIB_H;
+          ctx.save();
+          ctx.strokeStyle = '#ff1744';
+          ctx.lineWidth = Math.max(2, Math.round(canvas.width / 320));
+          ctx.setLineDash([]);
+          ctx.strokeRect(
+            this.roi.x * escalaX,
+            this.roi.y * escalaY,
+            this.roi.w * escalaX,
+            this.roi.h * escalaY
+          );
+          ctx.restore();
+        }
+
+        // ── contorno amarillo: elipse del huevo medido por el servidor ──
+        // Viene en pixeles del MISMO frame que se envio a /clasificar, que
+        // siempre tiene la resolucion real del canvas (video.videoWidth /
+        // videoHeight) — no necesita reescalarse como el ROI.
+        if (ctx && this.elipseHuevo) {
+          this.dibujarElipseHuevo(ctx, this.elipseHuevo);
+        }
       }
       this.liveLoopId = requestAnimationFrame(loop);
     };
     loop();
+  }
+
+  /** Dibuja el contorno amarillo de la elipse ajustada al huevo, mas las
+   * lineas de largo/diametro rotuladas en cm — sobre el mismo canvas del
+   * video en vivo, junto al recuadro rojo del ROI. */
+  private dibujarElipseHuevo(ctx: CanvasRenderingContext2D, e: RespuestaElipse) {
+    const AMARILLO = '#ffe600';
+    const radioX = e.ancho_px / 2;
+    const radioY = e.alto_px / 2;
+    const anguloRad = (e.angulo_deg * Math.PI) / 180;
+
+    ctx.save();
+    ctx.strokeStyle = AMARILLO;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(e.cx, e.cy, radioX, radioY, anguloRad, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // direccion de cada eje (misma convencion que OpenCV: 'ancho' rota
+    // segun angulo, 'alto' va perpendicular)
+    const dirAncho: [number, number] = [Math.cos(anguloRad), Math.sin(anguloRad)];
+    const dirAlto:  [number, number] = [-Math.sin(anguloRad), Math.cos(anguloRad)];
+
+    const esAnchoMayor = e.ancho_px >= e.alto_px;
+    const dirMayor = esAnchoMayor ? dirAncho : dirAlto;
+    const dirMenor = esAnchoMayor ? dirAlto  : dirAncho;
+    const ejeMayorPx = Math.max(e.ancho_px, e.alto_px);
+    const ejeMenorPx = Math.min(e.ancho_px, e.alto_px);
+
+    const linea = (dir: [number, number], largoPx: number, etiqueta: string) => {
+      const p1: [number, number] = [e.cx - dir[0] * largoPx / 2, e.cy - dir[1] * largoPx / 2];
+      const p2: [number, number] = [e.cx + dir[0] * largoPx / 2, e.cy + dir[1] * largoPx / 2];
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(p1[0], p1[1]);
+      ctx.lineTo(p2[0], p2[1]);
+      ctx.stroke();
+      ctx.font = '13px sans-serif';
+      ctx.fillStyle = AMARILLO;
+      ctx.fillText(etiqueta, p2[0] + 4, p2[1]);
+    };
+
+    linea(dirMayor, ejeMayorPx, `${e.largo_cm.toFixed(1)} cm`);
+    linea(dirMenor, ejeMenorPx, `${e.diametro_cm.toFixed(1)} cm`);
+    ctx.restore();
   }
 
   async cambiarCamara() {
@@ -534,6 +657,7 @@ export class ClasificacionService {
       cancelAnimationFrame(this.liveLoopId);
       this.liveLoopId = null;
     }
+    this.detenerLoopClasificacion();
     this.camStream?.getTracks().forEach((t) => t.stop());
     this.camStream = null;
     this.camActive = false;
@@ -541,57 +665,86 @@ export class ClasificacionService {
     if (video) video.srcObject = null;
   }
 
-  // ─── Captura y clasificacion ────────────────────────────────────────────
+  // ─── Lectura en vivo (loop continuo) ────────────────────────────────────
 
-  async capturarYClasificar() {
+  /** Arranca el sondeo periodico al servidor mientras la camara este activa. */
+  private iniciarLoopClasificacion() {
+    this.detenerLoopClasificacion();
+    const tick = () => {
+      if (!this.camActive) return;
+      if (this.servidorActivo && !this.consultando) {
+        this.consultarServidor();
+      } else if (!this.servidorActivo) {
+        // servidor caido: estimacion local por color, sigue en vivo igual
+        const canvas = document.getElementById('cam-canvas') as HTMLCanvasElement;
+        const video  = document.getElementById('cam-video')  as HTMLVideoElement;
+        if (canvas && video && video.readyState >= 2) {
+          canvas.width  = video.videoWidth  || 1280;
+          canvas.height = video.videoHeight || 720;
+          canvas.getContext('2d')?.drawImage(video, 0, 0);
+          this.clasificarLocal(canvas);
+        }
+      }
+      this.liveTimerId = window.setTimeout(tick, 800);
+    };
+    tick();
+  }
+
+  private detenerLoopClasificacion() {
+    if (this.liveTimerId !== null) {
+      clearTimeout(this.liveTimerId);
+      this.liveTimerId = null;
+    }
+  }
+
+  /** Toma un frame actual y lo manda al servidor — se llama sola cada 800ms. */
+  private async consultarServidor() {
     const video  = document.getElementById('cam-video')  as HTMLVideoElement;
     const canvas = document.getElementById('cam-canvas') as HTMLCanvasElement;
-    if (!video || !canvas) return;
+    if (!video || !canvas || video.readyState < 2) return;
 
     canvas.width  = video.videoWidth  || 1280;
     canvas.height = video.videoHeight || 720;
     canvas.getContext('2d')?.drawImage(video, 0, 0);
+    const frame = canvas.toDataURL('image/jpeg', 0.85);
 
-    // Guardamos la captura cruda — se reemplazará con frame_anotado si el servidor responde
-    this.capturaImg = canvas.toDataURL('image/jpeg', 0.92);
-
-    if (this.servidorActivo) {
-      await this.clasificarConServidor(this.capturaImg);
-    } else {
-      this.clasificarLocal(canvas);
+    this.consultando = true;
+    try {
+      const res = await firstValueFrom(
+        this.http.post<RespuestaVision>(`${PYTHON_API}/clasificar`, { frame })
+      );
+      this.capturaCat       = res.categoria;
+      this.capturaPeso      = res.peso_g;
+      this.capturaVol       = res.volumen_cm3;
+      this.capturaEjeMayor  = res.eje_mayor_mm;
+      this.capturaEjeMenor  = res.eje_menor_mm;
+      this.capturaConfianza = res.confianza;
+      this.capturaError     = res.error;
+      this.elipseHuevo       = res.elipse ?? null;
+    } catch {
+      this.servidorActivo = false;
+      this.toast.error('Servidor de vision no responde — usando estimacion local');
     }
+    this.consultando = false;
   }
 
-  private clasificarConServidor(b64: string) {
+  /** Boton "Capturar" (respaldo manual): fuerza una lectura inmediata. */
+  async capturarYClasificar() {
+    if (!this.camActive) return;
     this.procesando = true;
-    this.http
-      .post<RespuestaVision>(`${PYTHON_API}/clasificar`, { frame: b64 })
-      .subscribe({
-        next: (res) => {
-          this.capturaCat      = res.categoria;
-          this.capturaPeso     = res.peso_g;
-          this.capturaVol      = res.volumen_cm3;
-          this.capturaEjeMayor = res.eje_mayor_mm;
-          this.capturaEjeMenor = res.eje_menor_mm;
-          this.capturaConfianza = res.confianza;
-          this.capturaError    = res.error;
-
-          // ★ Mostrar la imagen con la elipse y medidas ya dibujadas
-          if (res.frame_anotado) {
-            this.capturaImg = res.frame_anotado;
-          }
-
-          this.showCaptura = true;
-          this.procesando  = false;
-        },
-        error: () => {
-          this.servidorActivo = false;
-          this.procesando     = false;
-          const canvas = document.getElementById('cam-canvas') as HTMLCanvasElement;
-          if (canvas) this.clasificarLocal(canvas);
-          this.toast.error('Servidor de vision no responde — usando estimacion local');
-        },
-      });
+    if (this.servidorActivo) {
+      await this.consultarServidor();
+    } else {
+      const canvas = document.getElementById('cam-canvas') as HTMLCanvasElement;
+      const video  = document.getElementById('cam-video')  as HTMLVideoElement;
+      if (canvas && video) {
+        canvas.width  = video.videoWidth  || 1280;
+        canvas.height = video.videoHeight || 720;
+        canvas.getContext('2d')?.drawImage(video, 0, 0);
+        this.clasificarLocal(canvas);
+      }
+    }
+    this.procesando = false;
   }
 
   private clasificarLocal(canvas: HTMLCanvasElement) {
@@ -603,7 +756,7 @@ export class ClasificacionService {
     this.capturaEjeMenor = 0;
     this.capturaConfianza = 'estimado';
     this.capturaError = 'Servidor no disponible — estimacion local por color';
-    this.showCaptura  = true;
+    this.elipseHuevo = null;   // sin servidor no hay geometria real que dibujar
   }
 
   private estimarVolumenLocal(canvas: HTMLCanvasElement): number {
@@ -640,9 +793,19 @@ export class ClasificacionService {
   }
 
   aceptarCaptura() {
+    if (!this.capturaCat) return;
+
+    // Anti-duplicado: si el huevo sigue en la bascula con el mismo peso
+    // que ya se guardo, no lo vuelve a contar.
+    if (this.capturaPeso !== null && this.capturaPeso === this.ultimoPesoGuardado) {
+      this.toast.error('Ese peso ya fue registrado — retira el huevo de la bascula');
+      return;
+    }
+
     this.cambiarConteo(this.capturaCat, 1);
-    this.showCaptura = false;
-    this.capturaImg  = '';
+    this.ultimoPesoGuardado = this.capturaPeso;
+    this.guardando = true;
+    setTimeout(() => (this.guardando = false), 500);
     this.toast.success(`${this.capturaCat} registrado`);
   }
 

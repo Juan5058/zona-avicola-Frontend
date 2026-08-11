@@ -1,321 +1,370 @@
 """
-servidor.py — FastAPI para clasificacion de huevos por vision
+
+USO:
+    uvicorn server:app --host 127.0.0.1 --port 8001
+
+Antes de usar la medicion de volumen, corre UNA VEZ:
+    python calibrar_escala.py
+para generar escala_config.json (px por cm), usando la hoja milimetrada
+como referencia.
 """
 
+import json
 import base64
-import io
-import subprocess
-import tempfile
-import os
-from typing import Optional
-
-import cv2
+import math
 import numpy as np
+import cv2
+import torch
+import torch.nn as nn
+from PIL import Image
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# ─── Configuracion ────────────────────────────────────────────────────────────
+ROI_CONFIG_FILE = "roi_config.json"
+ESCALA_CONFIG_FILE = "escala_config.json"
+SLOTS = 2
+IMG_SIZE = 32
+MODEL_PATH = "digit_model.pth"
+LABELS_PATH = "labels.json"
 
-MM_POR_PIXEL = 0.2132
-
-CATEGORIAS_PESO = [
+CATEGORIAS = [
     ("JUMBO", 73, float("inf")),
     ("AAA",   63, 73),
     ("AA",    53, 63),
     ("A",     43, 53),
     ("B",     33, 43),
-    ("C",      0, 33),
+    ("C",     0,  33),
 ]
 
-CATEGORIAS_VOL = [
+# Mismos cortes que volumenACategoria() en el frontend (clasificacion.service.ts),
+# usados como respaldo cuando no hay lectura de peso pero si de volumen.
+CATEGORIAS_VOLUMEN = [
     ("JUMBO", 68, float("inf")),
     ("AAA",   58, 68),
     ("AA",    48, 58),
     ("A",     38, 48),
     ("B",     28, 38),
-    ("C",      0, 28),
+    ("C",     0,  28),
 ]
 
-LCD_ROI   = (0.55, 0.60, 1.0, 1.0)
-HUEVO_ROI = (0.0,  0.0,  0.75, 0.80)
+# ─── Deteccion del huevo por color (tonos cafe/marron) ──────────────────────
+# HSV: descarta blancos/grises de la hoja milimetrada (baja saturacion) y
+# tonos muy oscuros (sombra, bascula negra: value bajo).
+HSV_HUEVO_BAJO = np.array([6,   35,  90])
+HSV_HUEVO_ALTO = np.array([32, 200, 255])
+AREA_MINIMA_HUEVO = 1500  # px^2, descarta ruido pequeno
 
-# ─── App ──────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Clasificador de Huevos", version="2.0")
+def peso_a_categoria(peso):
+    if peso is None:
+        return None
+    for nombre, minv, maxv in CATEGORIAS:
+        if minv <= peso < maxv:
+            return nombre
+    return "C"
+
+
+def volumen_a_categoria(vol):
+    if vol is None or vol <= 0:
+        return None
+    for nombre, minv, maxv in CATEGORIAS_VOLUMEN:
+        if minv <= vol < maxv:
+            return nombre
+    return "C"
+
+
+class DigitCNN(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 16, 3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, 3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(32 * 8 * 8, 64),
+            nn.ReLU(),
+            nn.Dropout(0.4),
+            nn.Linear(64, num_classes),
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.classifier(x)
+        return x
+
+
+def preprocesar(gray_crop):
+    h, w = gray_crop.shape[:2]
+    margen = max(1, int(w * 0.10))
+    gray_crop = gray_crop.copy()
+    gray_crop[0:max(1, int(h * 0.15)), w - margen:w] = int(np.median(gray_crop))
+
+    clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(4, 4))
+    eq = clahe.apply(gray_crop)
+    blur = cv2.GaussianBlur(eq, (5, 5), 0)
+    th = cv2.adaptiveThreshold(
+        blur, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        21, 10
+    )
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(th, connectivity=8)
+    limpio = np.zeros_like(th)
+    for i in range(1, num_labels):
+        if stats[i, cv2.CC_STAT_AREA] >= 12:
+            limpio[labels == i] = 255
+    kernel = np.ones((2, 2), np.uint8)
+    limpio = cv2.morphologyEx(limpio, cv2.MORPH_CLOSE, kernel)
+    return limpio
+
+
+with open(LABELS_PATH, "r") as f:
+    CLASSES = json.load(f)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = DigitCNN(num_classes=len(CLASSES))
+model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+model.to(device)
+model.eval()
+print(f"Modelo cargado. Clases: {CLASSES}")
+
+
+def predecir_digito(slot_gray):
+    proc = preprocesar(slot_gray)
+    pil_img = Image.fromarray(proc).resize((IMG_SIZE, IMG_SIZE))
+    tensor = torch.from_numpy(np.array(pil_img)).float() / 255.0
+    tensor = tensor.unsqueeze(0).unsqueeze(0).to(device)
+    with torch.no_grad():
+        output = model(tensor)
+        pred_idx = output.argmax(dim=1).item()
+    return CLASSES[pred_idx]
+
+
+def leer_roi_actual():
+    """Lee roi_config.json desde disco EN CADA LLAMADA, para que recalibrar
+    no requiera reiniciar el servidor."""
+    with open(ROI_CONFIG_FILE, "r") as f:
+        x, y, w, h = json.load(f)
+    return x, y, w, h
+
+
+def leer_escala_actual():
+    """Lee escala_config.json (px por cm) desde disco en cada llamada.
+    Devuelve None si aun no se ha calibrado (corre calibrar_escala.py)."""
+    try:
+        with open(ESCALA_CONFIG_FILE, "r") as f:
+            data = json.load(f)
+        px_por_cm = float(data["px_per_cm"])
+        if px_por_cm > 0:
+            return px_por_cm
+    except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def encontrar_punto_de_corte(gray_roi):
+    """Busca la columna con MENOS pixeles oscuros en la zona central,
+    en vez de asumir que el corte esta siempre a la mitad exacta."""
+    _, binaria = cv2.threshold(gray_roi, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    h, w = binaria.shape
+    conteo_col = (binaria > 0).sum(axis=0)
+
+    margen = max(3, int(w * 0.20))
+    ini, fin = margen, w - margen
+    if fin <= ini:
+        return w // 2
+
+    ventana = conteo_col[ini:fin]
+    idx_min = int(ventana.argmin())
+    return ini + idx_min
+
+
+def leer_peso_de_frame(frame_bgr):
+    roi_x, roi_y, roi_w, roi_h = leer_roi_actual()
+
+    h_frame, w_frame = frame_bgr.shape[:2]
+    if roi_y + roi_h > h_frame or roi_x + roi_w > w_frame:
+        return None, ""
+
+    crop = frame_bgr[roi_y:roi_y + roi_h, roi_x:roi_x + roi_w]
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+
+    punto_corte = encontrar_punto_de_corte(gray)
+    slots_gray = [gray[:, 0:punto_corte], gray[:, punto_corte:]]
+
+    digitos = []
+    for slot_gray in slots_gray:
+        label = predecir_digito(slot_gray)
+        if label != "blank":
+            digitos.append(label)
+
+    raw = "".join(digitos)
+    peso = int(raw) if raw.isdigit() and raw != "" else None
+    return peso, raw
+
+
+# ─── Deteccion del huevo + medicion por elipse ──────────────────────────────
+
+def detectar_contorno_huevo(frame_bgr):
+    """Segmenta por color (tonos cafe/marron, ignorando oscuros y la hoja
+    milimetrada blanca/gris) y devuelve el contorno mas grande encontrado,
+    suavizado para que bordes irregulares (cascara rota, brillos) no
+    desvien tanto el ajuste de la elipse. Devuelve None si no hay nada
+    que parezca un huevo."""
+    hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
+    mascara = cv2.inRange(hsv, HSV_HUEVO_BAJO, HSV_HUEVO_ALTO)
+
+    kernel = np.ones((7, 7), np.uint8)
+    mascara = cv2.morphologyEx(mascara, cv2.MORPH_OPEN, kernel)
+    mascara = cv2.morphologyEx(mascara, cv2.MORPH_CLOSE, kernel)
+
+    contornos, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contornos:
+        return None
+
+    mayor = max(contornos, key=cv2.contourArea)
+    if cv2.contourArea(mayor) < AREA_MINIMA_HUEVO or len(mayor) < 5:
+        return None
+
+    # simplifica el contorno (quita picos sueltos de cascara rota/brillos
+    # que sesgan el ajuste de la elipse hacia afuera) — pero si la
+    # simplificacion deja muy pocos puntos, usa el contorno original
+    perimetro = cv2.arcLength(mayor, True)
+    simplificado = cv2.approxPolyDP(mayor, 0.002 * perimetro, True)
+    if len(simplificado) >= 5:
+        mayor = simplificado
+    return mayor
+
+
+def ajustar_elipse(contorno):
+    """cv2.fitEllipseDirect es menos sensible a puntos atipicos que el
+    metodo clasico (fitEllipse); si la version de OpenCV no lo trae, usa
+    el metodo clasico como respaldo."""
+    if hasattr(cv2, "fitEllipseDirect"):
+        return cv2.fitEllipseDirect(contorno)
+    return cv2.fitEllipse(contorno)
+
+
+def medir_huevo(frame_bgr, px_por_cm):
+    """Ajusta una elipse real al contorno del huevo (no asume ovalo perfecto),
+    calcula largo/diametro en cm y el volumen como elipsoide de revolucion.
+    Devuelve (volumen_cm3, largo_mm, diametro_mm, elipse) donde elipse trae
+    la geometria en pixeles (cx, cy, ancho_px, alto_px, angulo_deg) para que
+    el FRONTEND la dibuje sobre su propio canvas — el servidor ya no genera
+    una imagen anotada. Devuelve (0, 0, 0, None) si no se detecto huevo."""
+    contorno = detectar_contorno_huevo(frame_bgr)
+    if contorno is None:
+        return 0.0, 0.0, 0.0, None
+
+    (cx, cy), (ancho_px, alto_px), angulo = ajustar_elipse(contorno)
+
+    eje_mayor_px = max(ancho_px, alto_px)
+    eje_menor_px = min(ancho_px, alto_px)
+
+    largo_cm = eje_mayor_px / px_por_cm
+    diametro_cm = eje_menor_px / px_por_cm
+
+    volumen = (4.0 / 3.0) * math.pi * (largo_cm / 2.0) * (diametro_cm / 2.0) ** 2
+
+    elipse = {
+        "cx": cx, "cy": cy,
+        "ancho_px": ancho_px, "alto_px": alto_px,
+        "angulo_deg": angulo,
+        "largo_cm": round(largo_cm, 1),
+        "diametro_cm": round(diametro_cm, 1),
+    }
+
+    return volumen, largo_cm * 10, diametro_cm * 10, elipse
+
+
+app = FastAPI(title="Servidor de vision - ZonaAvicola web")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ─── Modelos ──────────────────────────────────────────────────────────────────
 
 class FrameRequest(BaseModel):
     frame: str
 
-class ResultadoClasificacion(BaseModel):
-    categoria:    str
-    peso_g:       Optional[float]
-    volumen_cm3:  float
-    eje_mayor_mm: float
-    eje_menor_mm: float
-    confianza:    str
-    error:        Optional[str]
-    frame_anotado: Optional[str] = None  # imagen con elipse dibujada en base64
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def b64_a_bgr(b64: str) -> np.ndarray:
-    if "," in b64:
-        b64 = b64.split(",", 1)[1]
-    datos = base64.b64decode(b64)
-    arr   = np.frombuffer(datos, dtype=np.uint8)
-    return cv2.imdecode(arr, cv2.IMREAD_COLOR)
-
-def bgr_a_b64(img: np.ndarray) -> str:
-    _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 88])
-    return "data:image/jpeg;base64," + base64.b64encode(buf).decode()
-
-def recortar_roi(img: np.ndarray, roi: tuple) -> np.ndarray:
-    h, w = img.shape[:2]
-    x1, y1, x2, y2 = roi
-    return img[int(y1*h):int(y2*h), int(x1*w):int(x2*w)]
-
-# ─── Lectura de peso LCD ──────────────────────────────────────────────────────
-
-def _preprocesar_lcd(roi_bgr: np.ndarray) -> np.ndarray:
-    gris  = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))
-    gris  = clahe.apply(gris)
-    _, binaria = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    if np.mean(binaria) > 127:
-        binaria = cv2.bitwise_not(binaria)
-    return binaria
-
-def leer_peso_lcd(img_bgr: np.ndarray) -> Optional[float]:
-    roi     = recortar_roi(img_bgr, LCD_ROI)
-    binaria = _preprocesar_lcd(roi)
-    peso    = _ssocr(binaria)
-    if peso is not None:
-        return peso
-    try:
-        import pytesseract
-        from PIL import Image as PILImage
-        pil_img = PILImage.fromarray(binaria)
-        cfg   = r"--psm 7 -c tessedit_char_whitelist=0123456789."
-        texto = pytesseract.image_to_string(pil_img, config=cfg).strip()
-        val   = float(texto.replace(",", "."))
-        if val > 200:  return val
-        if val < 10:   return val * 1000
-        return val
-    except Exception:
-        pass
-    return None
-
-def _ssocr(binaria: np.ndarray) -> Optional[float]:
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            tmp_path = tmp.name
-        cv2.imwrite(tmp_path, binaria)
-        resultado = subprocess.run(["ssocr", "-T", tmp_path],
-                                   capture_output=True, text=True, timeout=3)
-        os.unlink(tmp_path)
-        if resultado.returncode == 0:
-            val = float(resultado.stdout.strip().replace(",", "."))
-            if 1 <= val <= 10000:
-                return val
-    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
-        pass
-    return None
-
-# ─── Medicion del huevo ───────────────────────────────────────────────────────
-
-def medir_huevo(img_bgr: np.ndarray) -> dict:
-    """
-    Detecta el huevo, mide sus ejes y dibuja la elipse sobre la imagen completa.
-    Retorna dict con medidas + imagen anotada.
-    """
-    h_full, w_full = img_bgr.shape[:2]
-    roi_x1 = int(0.0  * w_full)
-    roi_y1 = int(0.0  * h_full)
-    roi_x2 = int(0.75 * w_full)
-    roi_y2 = int(0.80 * h_full)
-    roi = img_bgr[roi_y1:roi_y2, roi_x1:roi_x2]
-    h, w = roi.shape[:2]
-
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-
-    # Huevos cafe/marron
-    mascara_cafe = cv2.inRange(hsv, np.array([5, 30, 80]), np.array([35, 255, 255]))
-
-    # Huevos blancos/crema — rango mas estrecho para evitar confundir con el plato
-    mascara_blanco = cv2.inRange(hsv, np.array([0, 0, 160]), np.array([30, 60, 240]))
-
-    mascara = cv2.bitwise_or(mascara_cafe, mascara_blanco)
-
-    # Morfologia para limpiar
-    kernel  = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
-    mascara = cv2.morphologyEx(mascara, cv2.MORPH_CLOSE, kernel, iterations=3)
-    mascara = cv2.morphologyEx(mascara, cv2.MORPH_OPEN,  kernel, iterations=2)
-
-    contornos, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    FALLO = {"ok": False, "eje_mayor_mm": 0, "eje_menor_mm": 0,
-             "volumen_cm3": 50.0, "frame_anotado": None}
-
-    if not contornos:
-        return FALLO
-
-    # Filtrar contornos por area Y por circularidad (el huevo es mas circular que el plato)
-    area_min = (h * w) * 0.01
-    area_max = (h * w) * 0.60  # evitar que tome todo el plato
-
-    def circularidad(c):
-        area = cv2.contourArea(c)
-        perim = cv2.arcLength(c, True)
-        if perim == 0: return 0
-        return 4 * np.pi * area / (perim ** 2)
-
-    contornos_validos = [
-        c for c in contornos
-        if area_min < cv2.contourArea(c) < area_max and circularidad(c) > 0.5
-    ]
-
-    if not contornos_validos:
-        return FALLO
-
-    # El huevo: contorno mas circular entre los validos
-    huevo = max(contornos_validos, key=circularidad)
-
-    if len(huevo) < 5:
-        return FALLO
-
-    (cx, cy), (eje_a_px, eje_b_px), angulo = cv2.fitEllipse(huevo)
-
-    radio_mayor_px = max(eje_a_px, eje_b_px) / 2
-    radio_menor_px = min(eje_a_px, eje_b_px) / 2
-
-    # Validar que los ejes sean razonables en pixeles
-    # Un huevo real mide 45-75mm, con MM_POR_PIXEL=0.2132 eso es ~210-350 px de diametro
-    if radio_mayor_px < 50 or radio_mayor_px > 600:
-        return FALLO
-
-    radio_mayor_mm = radio_mayor_px * MM_POR_PIXEL
-    radio_menor_mm = radio_menor_px * MM_POR_PIXEL
-    eje_mayor_mm   = radio_mayor_mm * 2
-    eje_menor_mm   = radio_menor_mm * 2
-
-    a_cm = radio_mayor_mm / 10
-    b_cm = radio_menor_mm / 10
-    volumen_cm3 = float(np.clip((4/3) * np.pi * a_cm * (b_cm**2), 20, 100))
-
-    # ── Dibujar elipse sobre la imagen completa ───────────────────────────────
-    anotada = img_bgr.copy()
-
-    # Offset de la ROI para dibujar en coordenadas del frame completo
-    cx_full = cx + roi_x1
-    cy_full = cy + roi_y1
-
-    # Elipse verde sobre el huevo
-    cv2.ellipse(
-        anotada,
-        (int(cx_full), int(cy_full)),
-        (int(max(eje_a_px, eje_b_px)/2), int(min(eje_a_px, eje_b_px)/2)),
-        angulo, 0, 360,
-        (0, 230, 0), 3
-    )
-
-    # Ejes cruzados
-    cv2.line(anotada,
-             (int(cx_full - radio_mayor_px), int(cy_full)),
-             (int(cx_full + radio_mayor_px), int(cy_full)),
-             (0, 200, 255), 2)
-    cv2.line(anotada,
-             (int(cx_full), int(cy_full - radio_menor_px)),
-             (int(cx_full), int(cy_full + radio_menor_px)),
-             (0, 200, 255), 2)
-
-    # Texto con medidas
-    texto = f"{eje_mayor_mm:.1f}x{eje_menor_mm:.1f}mm"
-    cv2.putText(anotada, texto,
-                (int(cx_full) - 60, int(cy_full) - int(radio_menor_px) - 12),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 230, 0), 2)
-
-    return {
-        "ok":           True,
-        "eje_mayor_mm": round(eje_mayor_mm, 1),
-        "eje_menor_mm": round(eje_menor_mm, 1),
-        "volumen_cm3":  round(volumen_cm3,  1),
-        "frame_anotado": bgr_a_b64(anotada),
-    }
-
-# ─── Clasificacion ────────────────────────────────────────────────────────────
-
-def clasificar_por_peso(gramos: float) -> str:
-    for cat, min_g, max_g in CATEGORIAS_PESO:
-        if min_g < gramos <= max_g:
-            return cat
-    return "C"
-
-def clasificar_por_volumen(vol_cm3: float) -> str:
-    for cat, min_v, max_v in CATEGORIAS_VOL:
-        if min_v < vol_cm3 <= max_v:
-            return cat
-    return "C"
-
-# ─── Endpoint principal ───────────────────────────────────────────────────────
-
-@app.post("/clasificar", response_model=ResultadoClasificacion)
-async def clasificar(req: FrameRequest):
-    img = b64_a_bgr(req.frame)
-    if img is None:
-        return ResultadoClasificacion(
-            categoria="C", peso_g=None, volumen_cm3=50,
-            eje_mayor_mm=0, eje_menor_mm=0,
-            confianza="volumen", error="No se pudo decodificar la imagen"
-        )
-
-    error_msg = None
-
-    medicion = medir_huevo(img)
-    if not medicion["ok"]:
-        error_msg = "No se detecto el huevo — verifique iluminacion y posicion"
-
-    volumen_cm3    = medicion["volumen_cm3"]
-    eje_mayor_mm   = medicion["eje_mayor_mm"]
-    eje_menor_mm   = medicion["eje_menor_mm"]
-    frame_anotado  = medicion.get("frame_anotado")
-
-    peso_g = leer_peso_lcd(img)
-
-    if peso_g is not None and 10 <= peso_g <= 200:
-        categoria = clasificar_por_peso(peso_g)
-        confianza = "peso"
-    else:
-        categoria = clasificar_por_volumen(volumen_cm3)
-        confianza = "volumen"
-        if peso_g is not None:
-            error_msg = f"Peso fuera de rango ({peso_g}g) — se uso volumen"
-            peso_g    = None
-
-    return ResultadoClasificacion(
-        categoria     = categoria,
-        peso_g        = round(peso_g, 1) if peso_g else None,
-        volumen_cm3   = volumen_cm3,
-        eje_mayor_mm  = eje_mayor_mm,
-        eje_menor_mm  = eje_menor_mm,
-        confianza     = confianza,
-        error         = error_msg,
-        frame_anotado = frame_anotado,
-    )
 
 @app.get("/ping")
 def ping():
-    return {"ok": True, "version": "2.0"}
+    return {"status": "ok"}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+
+@app.get("/roi")
+def roi():
+    """Devuelve el ROI actual (leido de roi_config.json en cada llamada) para
+    que el frontend pueda dibujar el contorno de calibracion en rojo."""
+    x, y, w, h = leer_roi_actual()
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
+@app.post("/clasificar")
+def clasificar(req: FrameRequest):
+    try:
+        b64 = req.frame.split(",", 1)[1] if "," in req.frame else req.frame
+        img_bytes = base64.b64decode(b64)
+        npimg = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+
+        if frame is None:
+            return {
+                "categoria": "C", "peso_g": None, "volumen_cm3": 0,
+                "eje_mayor_mm": 0, "eje_menor_mm": 0,
+                "confianza": "estimado", "error": "No se pudo leer la imagen",
+                "elipse": None,
+            }
+
+        peso, raw = leer_peso_de_frame(frame)
+
+        px_por_cm = leer_escala_actual()
+        volumen, largo_mm, diametro_mm, elipse = (0.0, 0.0, 0.0, None)
+        error_escala = None
+        if px_por_cm is None:
+            error_escala = "Falta calibrar escala: corre python calibrar_escala.py"
+        else:
+            volumen, largo_mm, diametro_mm, elipse = medir_huevo(frame, px_por_cm)
+
+        if peso is not None:
+            categoria = peso_a_categoria(peso)
+            confianza = "peso"
+            error = error_escala  # avisa aunque el peso si se haya leido
+        elif volumen > 0:
+            categoria = volumen_a_categoria(volumen)
+            confianza = "volumen"
+            error = None
+        else:
+            categoria = "C"
+            confianza = "estimado"
+            error = error_escala or "No se detecto un peso ni un huevo valido"
+
+        return {
+            "categoria": categoria,
+            "peso_g": peso,
+            "volumen_cm3": round(volumen, 1),
+            "eje_mayor_mm": round(largo_mm, 1),
+            "eje_menor_mm": round(diametro_mm, 1),
+            "confianza": confianza,
+            "error": error,
+            "elipse": elipse,
+        }
+    except Exception as ex:
+        return {
+            "categoria": "C", "peso_g": None, "volumen_cm3": 0,
+            "eje_mayor_mm": 0, "eje_menor_mm": 0,
+            "confianza": "estimado", "error": str(ex),
+            "elipse": None,
+        }
