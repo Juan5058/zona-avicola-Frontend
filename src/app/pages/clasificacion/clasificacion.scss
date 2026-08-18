@@ -279,6 +279,15 @@ $red-border:   #ffcdd2;
 
 .captura-actions { display: flex; gap: 8px; }
 
+// destello breve al guardar (Enter) para confirmar visualmente el registro
+.captura-guardando {
+  animation: flash-guardado 0.5s ease;
+}
+@keyframes flash-guardado {
+  0%   { background: #c8f2cc; border-color: $green-dark; }
+  100% { background: #f0fbf1; border-color: $green-main; }
+}
+
 // ─── Panel camara ────────────────────────────────────────────────────────────
 
 .cam-panel {
@@ -301,12 +310,9 @@ $red-border:   #ffcdd2;
   overflow: hidden;
   aspect-ratio: 16 / 9;
   border: 2px solid #2a3a2a;
-  user-select: none; // evita seleccionar texto de la pagina mientras se arrastra
 
   video { width: 100%; height: 100%; object-fit: cover; display: block; }
 }
-// cuando la camara esta activa, el cursor invita a arrastrar para calibrar el visor
-.cam-box-arrastrable { cursor: crosshair; }
 
 .cam-overlay {
   position: absolute;
@@ -318,78 +324,6 @@ $red-border:   #ffcdd2;
 
 .cam-hint { font-size: 14.5px; color: $text-hint; margin: 0; }
 .cam-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-// recuadro que marca donde se recorta el visor LCD para el OCR
-// peso en vivo, esquina superior izquierda de la camara
-.peso-overlay {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 3;
-  background: rgba(10, 26, 10, 0.78);
-  color: #4ade80;
-  font-weight: 700;
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(74, 222, 128, 0.4);
-  pointer-events: none;
-}
-.peso-overlay-sinlectura {
-  color: #cbd5e1;
-  border-color: rgba(203, 213, 225, 0.3);
-}
-
-.roi-overlay {
-  position: absolute;
-  border: 2px dashed #22d3ee;
-  background: rgba(34, 211, 238, 0.08);
-  pointer-events: none;
-  transition: left 0.15s, top 0.15s, width 0.15s, height 0.15s;
-}
-.roi-overlay-label {
-  position: absolute;
-  top: -20px; left: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: #0e7490;
-  background: rgba(255,255,255,0.85);
-  border-radius: 4px;
-  padding: 1px 5px;
-}
-// recuadro en vivo mientras el usuario arrastra el mouse sobre el video
-.roi-overlay-drag {
-  border: 2px solid #facc15;
-  background: rgba(250, 204, 21, 0.12);
-  transition: none; // sin animacion de retraso: debe seguir al mouse al instante
-}
-
-// texto que invita a arrastrar sobre el video para calibrar (metodo principal)
-.roi-drag-hint {
-  font-size: 12px;
-  color: $text-hint;
-  .ia-hint { display: block; font-size: 11px; opacity: 0.8; margin-top: 2px; }
-}
-
-// calibracion del ROI del LCD
-.roi-calibracion {
-  font-size: 12.5px;
-  border: 1px solid $green-border;
-  border-radius: 8px;
-  padding: 6px 10px;
-
-  summary { cursor: pointer; font-weight: 700; color: $text-hint; }
-}
-.roi-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin: 8px 0;
-
-  label { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: $text-hint; }
-  input { width: 100%; padding: 3px 6px; border: 1px solid $green-border; border-radius: 5px; }
-}
 
 .captura-result {
   background: #f0fbf1;
@@ -1747,94 +1681,4 @@ div.filter-bar,
     display: inline-block !important;
     line-height: 34px !important;
   }
-}
-
-// ── Calibracion manual de digitos (auto/auto.html) ──────────────────────
-// Panel para arrastrar las 3 lineas divisorias sobre el recorte binarizado
-// ya ampliado — mucho mas facil de calibrar con precision que sobre el
-// video en vivo.
-.calib-panel {
-  margin: 10px 0;
-  padding: 10px;
-  background: #f1f8f1;
-  border: 1px solid #c8e6c9;
-  border-radius: 8px;
-}
-.calib-hint {
-  margin: 0 0 8px;
-  font-size: 12.5px;
-  color: #33691e;
-}
-.calib-img-wrap {
-  position: relative;
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  user-select: none;
-  touch-action: none;
-  border: 1px solid #a5d6a7;
-  border-radius: 4px;
-  overflow: hidden;
-  background: #000;
-}
-.calib-img {
-  display: block;
-  width: 100%;
-  height: auto;
-  image-rendering: pixelated;
-}
-.calib-divisor {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 14px;
-  margin-left: -7px;
-  cursor: ew-resize;
-  &::before {
-    content: '';
-    position: absolute;
-    left: 6px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: #ff2d55;
-  }
-  &::after {
-    content: '';
-    position: absolute;
-    left: 1px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 12px;
-    height: 22px;
-    background: #ff2d55;
-    border-radius: 4px;
-    box-shadow: 0 0 0 2px #fff;
-  }
-}
-.calib-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 10px;
-}
-
-// Aviso de calibracion pendiente — necesita llamar la atencion, la version
-// anterior de este boton era un texto de 10px casi invisible en una
-// esquina, y eso hizo que se confundiera "falta calibrar" con "el codigo
-// se rompio".
-.calib-btn-pendiente {
-  background: #ff9800 !important;
-  border-color: #f57c00 !important;
-  animation: calib-pulse 1.4s ease-in-out infinite;
-}
-.calib-banner {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-@keyframes calib-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255,152,0,0.55); }
-  50%      { box-shadow: 0 0 0 6px rgba(255,152,0,0); }
 }
