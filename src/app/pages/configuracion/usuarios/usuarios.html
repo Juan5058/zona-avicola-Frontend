@@ -102,7 +102,11 @@
                       <td>
                         <div class="td-actions">
                           <button class="btn btn-secondary btn-sm" (click)="svc.editUsr(u)">Editar</button>
-                          <button class="btn btn-danger btn-sm" (click)="svc.elimUsr(u)" [disabled]="svc.esYo(u)">Desactivar</button>
+                          @if (u.activo) {
+                            <button class="btn btn-danger btn-sm" (click)="svc.elimUsr(u)" [disabled]="svc.esYo(u)">Desactivar</button>
+                          } @else {
+                            <button class="btn btn-success btn-sm" (click)="svc.reactivarUsr(u)">Activar</button>
+                          }
                         </div>
                       </td>
                     </tr>

@@ -46,10 +46,10 @@ export class InventarioService {
 
   // opciones dinamicas
   cats: { id: number; nombre: string }[] = [...CATEGORIAS_DEFAULT];
-  opcionesUnidades: string[] = [...UNIDADES_DEFAULT];
+  opcionesUnidades: any[] = [...UNIDADES_DEFAULT];
 
   // Unidades para alimentos: misma lista que inventario general (una sola fuente de verdad)
-  get alimentoUnidades(): string[] {
+  get alimentoUnidades(): any[] {
     return this.opcionesUnidades;
   }
 
@@ -192,38 +192,25 @@ export class InventarioService {
   }
 
   // ── OPCIONES DINAMICAS ──
-  cargarOpciones() {
+  async cargarOpciones() {
     try {
-      const saved = localStorage.getItem(LS_KEY_INV);
-      if (!saved) return;
-      const p = JSON.parse(saved);
-      if (p.unidades) this.opcionesUnidades = [...new Set([...UNIDADES_DEFAULT, ...p.unidades])];
-      // Nota: unidadesAlim ya no se guarda por separado; se derivan de opcionesUnidades
-      if (p.categorias) {
-        const nextId = Math.max(...this.cats.map((c) => c.id)) + 1;
-        p.categorias.forEach((nombre: string, i: number) => {
-          if (!this.cats.find((c) => c.nombre === nombre)) {
-            this.cats.push({ id: nextId + i, nombre });
-          }
-        });
+      const [catsRes, unidadesRes] = await Promise.all([
+        this.api.get<any[]>('/inventario/categorias').catch(() => []),
+        this.api.get<any[]>('/unidades').catch(() => []),
+      ]);
+      if (Array.isArray(catsRes) && catsRes.length > 0) {
+        this.cats = catsRes.map((c) => ({ id: c.id_categoria, nombre: c.nombre }));
+      }
+      if (Array.isArray(unidadesRes) && unidadesRes.length > 0) {
+        this.opcionesUnidades = unidadesRes;
       }
     } catch {
-      /* ignorar JSON invalido */
+      /* usar defaults en caso de fallar red */
     }
   }
 
   guardarOpciones() {
-    const extraUnidades = this.opcionesUnidades.filter((u) => !UNIDADES_DEFAULT.includes(u));
-    const extraCats = this.cats
-      .filter((c) => c.id > CATEGORIAS_DEFAULT.length)
-      .map((c) => c.nombre);
-    localStorage.setItem(
-      LS_KEY_INV,
-      JSON.stringify({
-        unidades: extraUnidades,
-        categorias: extraCats,
-      }),
-    );
+    /* Las opciones ahora se guardan directamente en el backend mediante los endpoints */
   }
 
   abrirAddOpcion(key: string, label: string) {
@@ -233,71 +220,70 @@ export class InventarioService {
     this.addOpcionVisible = true;
   }
 
-  confirmarAddOpcion() {
+  async confirmarAddOpcion() {
     const val = this.addOpcionNuevo.trim();
     if (!val) return;
-    if (this.addOpcionKey === 'unidades' && !this.opcionesUnidades.includes(val)) {
-      this.opcionesUnidades.push(val);
-      this.guardarOpciones();
-      this.toast.success(`Unidad "${val}" anadida`);
-    } else if (this.addOpcionKey === 'unidadesAlim' && !this.opcionesUnidades.includes(val)) {
-      // Las unidades de alimento se agregan a la lista general unificada
-      this.opcionesUnidades.push(val);
-      this.guardarOpciones();
-      this.toast.success(`Unidad "${val}" anadida`);
-    } else if (this.addOpcionKey === 'categorias' && !this.cats.find((c) => c.nombre === val)) {
-      const nextId = Math.max(...this.cats.map((c) => c.id)) + 1;
-      this.cats.push({ id: nextId, nombre: val });
-      this.guardarOpciones();
-      this.toast.success(`Categoria "${val}" anadida`);
+    if (this.addOpcionKey === 'categorias') {
+      try {
+        await this.api.post('/inventario/categorias', { nombre: val });
+        await this.cargarOpciones();
+        this.toast.success(`Categoria "${val}" anadida`);
+      } catch (e: any) {
+        this.toast.error(e.message || 'Error al anadir categoria');
+      }
+    } else if (this.addOpcionKey === 'unidades' || this.addOpcionKey === 'unidadesAlim') {
+      try {
+        await this.api.post('/unidades', { nombre: val, abreviatura: val });
+        await this.cargarOpciones();
+        this.toast.success(`Unidad "${val}" anadida`);
+      } catch (e: any) {
+        this.toast.error(e.message || 'Error al anadir unidad');
+      }
     }
     this.addOpcionNuevo = '';
   }
 
-  eliminarOpcionUnidad(val: string) {
-    if (UNIDADES_DEFAULT.includes(val)) {
+  async eliminarOpcionUnidad(u: any) {
+    const id = typeof u === 'object' ? u.id_unidad : null;
+    const nombre = typeof u === 'object' ? u.nombre : u;
+    if (!id) {
       this.toast.warning('No se puede eliminar una unidad predeterminada');
       return;
     }
-    this.opcionesUnidades = this.opcionesUnidades.filter((u) => u !== val);
-    this.guardarOpciones();
-    this.toast.warning(`"${val}" eliminado`);
+    try {
+      await this.api.delete(`/unidades/${id}`);
+      await this.cargarOpciones();
+      this.toast.warning(`"${nombre}" eliminado`);
+    } catch (e: any) {
+      this.toast.error(e.message || 'Error al eliminar unidad');
+    }
   }
 
-  eliminarOpcionCat(cat: { id: number; nombre: string }) {
-    if (cat.id <= CATEGORIAS_DEFAULT.length) {
-      this.toast.warning('No se puede eliminar una categoria predeterminada');
-      return;
+  async eliminarOpcionCat(cat: { id: number; nombre: string }) {
+    try {
+      await this.api.delete(`/inventario/categorias/${cat.id}`);
+      await this.cargarOpciones();
+      this.toast.warning(`"${cat.nombre}" eliminado`);
+    } catch (e: any) {
+      this.toast.error(e.message || 'Error al eliminar categoria');
     }
-    this.cats = this.cats.filter((c) => c.id !== cat.id);
-    this.guardarOpciones();
-    this.toast.warning(`"${cat.nombre}" eliminado`);
   }
 
   getOpcionesModal(): string[] {
-    if (this.addOpcionKey === 'unidades') return this.opcionesUnidades;
+    if (this.addOpcionKey === 'unidades') return this.opcionesUnidades.map((u: any) => u.nombre || u.abreviatura || u);
     if (this.addOpcionKey === 'categorias') return this.cats.map((c) => c.nombre);
-    if (this.addOpcionKey === 'unidadesAlim') return this.alimentoUnidades;
+    if (this.addOpcionKey === 'unidadesAlim') return (this.alimentoUnidades || []).map((u: any) => u.nombre || u.abreviatura || u);
     return [];
   }
 
-  eliminarOpcionModal(val: string) {
-    if (this.addOpcionKey === 'unidades') {
-      this.eliminarOpcionUnidad(val);
-      return;
-    }
-    if (this.addOpcionKey === 'unidadesAlim') {
-      if (ALIMENTO_UNIDADES.includes(val) || UNIDADES_DEFAULT.includes(val)) {
-        this.toast.warning('No se puede eliminar una unidad predeterminada');
-        return;
-      }
-      this.opcionesUnidades = this.opcionesUnidades.filter((u) => u !== val);
-      this.guardarOpciones();
-      this.toast.warning(`"${val}" eliminado`);
+  async eliminarOpcionModal(val: string) {
+    if (this.addOpcionKey === 'unidades' || this.addOpcionKey === 'unidadesAlim') {
+      const target = this.opcionesUnidades.find((u: any) => (u.nombre === val || u.abreviatura === val || u === val));
+      if (target) await this.eliminarOpcionUnidad(target);
       return;
     }
     const cat = this.cats.find((c) => c.nombre === val);
-    if (cat) this.eliminarOpcionCat(cat);
+    if (cat) await this.eliminarOpcionCat(cat);
   }
 
   // ── CARGA INICIAL ──
@@ -474,16 +460,24 @@ export class InventarioService {
       this.toast.error('Selecciona una categoria');
       return;
     }
-    const body = {
+    const body: any = {
       nombre: this.invForm.nombre,
       id_categoria: +this.invForm.cat_id,
-      stock_actual: 0,
       stock_minimo: +this.invForm.min || 0,
       precio: +this.invForm.costo || 0,
       proveedor: this.invForm.proveedor || '',
-      unidad: this.invForm.unidad,
       observaciones: this.invForm.obs || '',
     };
+    // stock_actual solo se manda en 0 al CREAR un item nuevo (arranca en cero,
+    // se llena despues via entradas). Si se manda tambien al EDITAR, borra el
+    // stock real existente cada vez que alguien solo quiere cambiar el nombre,
+    // la categoria, el minimo, etc.
+    if (!this.editInvId) {
+      body.stock_actual = 0;
+    }
+    if (this.invForm.unidad && !isNaN(+this.invForm.unidad)) {
+      body.id_unidad = +this.invForm.unidad;
+    }
     try {
       if (this.editInvId) await this.api.patch(`/inventario/${this.editInvId}`, body);
       else await this.api.post('/inventario', body);
@@ -545,9 +539,12 @@ export class InventarioService {
     this.movItem = this.inv.find((r) => r._id == this.movItemId) || null;
   }
 
+  movLoteId = '';
+
   limpiarMovInv() {
     this.movItem = null;
     this.movItemId = '';
+    this.movLoteId = '';
     this.movCantidad = null;
     this.movFecha = this.today;
     this.movObs = '';
@@ -570,6 +567,8 @@ export class InventarioService {
         cantidad: r.cantidad,
         costo: 0,
         obs: r.motivo || r.observaciones || '',
+        lote: r.lote?.codigo || '—',
+        lote_id: r.lote?.id_lote || null,
       }));
       const ent = entradas.map((r: any) => ({
         _id: r.id_entrada,
@@ -581,6 +580,8 @@ export class InventarioService {
         cantidad: r.cantidad,
         costo: r.costo_unitario || 0,
         obs: r.observaciones || '',
+        lote: '—',
+        lote_id: null,
       }));
       this.movHistorial = [...sal, ...ent].sort(
         (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
@@ -641,9 +642,10 @@ export class InventarioService {
         this.toast.error('Cantidad mayor al stock disponible');
         return;
       }
-      const body = {
+      const body: any = {
         id_item: +this.movItem._id,
         cantidad: +this.movCantidad,
+        id_lote: this.movLoteId ? +this.movLoteId : undefined,
         fecha: this.movFecha,
         observaciones: this.movObs || '',
       };
@@ -665,6 +667,7 @@ export class InventarioService {
     this.movTipo = r.tipo;
     this.movItemId = r.item_id;
     this.movItem = this.inv.find((x) => x._id == r.item_id) || null;
+    this.movLoteId = r.lote_id ? String(r.lote_id) : '';
     this.movCantidad = r.cantidad;
     this.movFecha = r.fecha?.split('T')[0] || this.today;
     this.movObs = r.obs;
@@ -756,13 +759,18 @@ export class InventarioService {
     }
     const body: any = {
       nombre: this.alimentoNombre,
-      stock_actual: 0,
       stock_minimo: +this.alimentoMin || 0,
       unidad: this.alimentoUnidad,
       costo_unitario: +this.alimentoCosto || 0,
       proveedor: this.alimentoProveedor || '',
       observaciones: this.alimentoObs || '',
     };
+    // stock_actual solo se manda en 0 al CREAR (arranca en cero). Si se manda
+    // tambien al EDITAR, borra el stock real cada vez que se actualiza el
+    // nombre, el minimo, etc. (mismo bug que tenia Inventario General).
+    if (!this.editAlimentoId) {
+      body.stock_actual = 0;
+    }
     try {
       if (this.editAlimentoId) await this.api.patch(`/alimentos/${this.editAlimentoId}`, body);
       else await this.api.post('/alimentos', body);
