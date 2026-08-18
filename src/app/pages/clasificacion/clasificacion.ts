@@ -46,10 +46,11 @@ export class ClasificacionComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(e: Event) {
-    const ke  = e as KeyboardEvent;
-    if (ke.key !== 'Enter') return;
-    const tag = (ke.target as HTMLElement).tagName;
-    if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(tag)) return;
+    const ke = e as KeyboardEvent;
+    if (ke.key !== ' ' && ke.code !== 'Space') return;
+    const activeEl = document.activeElement as HTMLElement;
+    const tag = activeEl ? activeEl.tagName : '';
+    if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(tag) || activeEl?.isContentEditable) return;
     if (this.svc.modo === 'auto' && this.svc.camActive && !this.svc.procesando) {
       ke.preventDefault();
       this.svc.onEnter();

@@ -7,18 +7,30 @@
   <div class="cam-panel">
     <div class="section-title">Camara de Clasificacion</div>
 
-    <!-- estado del servidor Python -->
-    @if (svc.verificandoServer) {
-    <div class="ia-status ia-verificando">Verificando servidor de vision...</div>
-    } @else if (svc.servidorActivo) {
-    <div class="ia-status ia-ok">Servidor activo — peso LCD + medicion por hoja milimetrada</div>
+    <!-- estado del lector de peso (OCR en el navegador) -->
+    @if (svc.ocrCargando) {
+    <div class="ia-status ia-verificando">Cargando lector de peso (OCR)...</div>
+    } @else if (svc.leyendoPeso) {
+    <div class="ia-status ia-ok">
+      Leyendo bascula en vivo
+      @if (svc.pesoLive !== null) { — <strong>{{ svc.pesoLive }} g</strong> }
+      @else { — sin lectura aun }
+    </div>
     } @else {
     <div class="ia-status ia-warn">
-      Servidor no disponible —
-      <span class="ia-hint">ejecuta: <code>python server.py</code></span>
-      <button class="btn-reintentar" (click)="svc.verificarServidor()">Reintentar</button>
+      Lector de peso inactivo —
+      <span class="ia-hint">inicia la camara para comenzar a leer la bascula</span>
     </div>
     }
+    @if (svc.leyendoPeso && svc.pesoTexto) {
+    <div class="ia-hint">OCR crudo: "{{ svc.pesoTexto }}"</div>
+    }
+
+    <!-- El recuadro del visor LCD queda fijo con lo que ya esta calibrado
+         (guardado en el navegador) — se quito el arrastre y el panel de
+         ajuste por numeros para no tener que tocarlo cada vez. Si en algun
+         momento hay que recalibrar, svc.roiLcd se puede volver a exponer
+         aqui o editar directo en el service. -->
 
     <!-- Selector de camara -->
     <div class="cam-selector-row">
@@ -40,22 +52,69 @@
       }
     </div>
 
-    <!-- atajo Enter -->
+    <!-- atajo Espacio -->
     @if (svc.camActive) {
     <div class="enter-hint">
-      Presiona <kbd>Enter</kbd> para
-      @if (svc.showCaptura) { aceptar el resultado } @else { capturar }
+      Presiona <kbd>Espacio</kbd> para capturar
     </div>
     }
 
     <!-- visor de video -->
-    <div class="cam-box" [class.cam-procesando]="svc.procesando">
+    <div class="cam-box" #camBox
+         [class.cam-procesando]="svc.procesando">
       <video id="cam-video" autoplay playsinline style="display:none"></video>
       <canvas id="cam-live"
               [style.display]="svc.camActive ? 'block' : 'none'"
               style="width:100%;height:100%;object-fit:cover;display:block;">
       </canvas>
+      <canvas id="cam-overlay"
+              [style.display]="svc.camActive ? 'block' : 'none'"
+              style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:3;object-fit:cover;">
+      </canvas>
       <canvas id="cam-canvas" style="display:none"></canvas>
+
+      @if (svc.camActive) {
+      <div class="peso-overlay" [class.peso-overlay-sinlectura]="svc.pesoLive === null">
+        <div class="overlay-row-main">
+          <span class="overlay-cat" [style.color]="svc.getCatColor(svc.categoriaLive)">{{ svc.categoriaLive }}</span>
+          <span class="overlay-val">
+            @if (svc.pesoLive !== null) { {{ svc.pesoLive }} g }
+            @else { — g }
+          </span>
+        </div>
+        <div class="overlay-row-sub">
+          <span>Vol: {{ svc.volumenLive !== null ? (svc.volumenLive + ' cm³') : '—' }}</span>
+        </div>
+      </div>
+      }
+      @if (svc.camActive && (svc.debugImgUrl || svc.debugVolImgUrl)) {
+      <div style="position:absolute; bottom:8px; right:8px; z-index:5; background:rgba(0,0,0,.72); padding:4px 6px; border-radius:5px; display:flex; flex-direction:column; gap:3px; max-width:200px;">
+        @if (svc.debugImgUrl) {
+          <div>
+            <img [src]="svc.debugImgUrl" alt="Recorte LCD binarizado"
+                 style="width:100%; image-rendering:pixelated; display:block; border:1px solid #555;">
+            <span style="color:#aaa; font-size:9px; display:block; text-align:center;">LCD: crudo | binarizado + manchas</span>
+          </div>
+        }
+        @if (svc.debugVolImgUrl) {
+          <div>
+            <img [src]="svc.debugVolImgUrl" alt="Máscara HSV segmentación huevo"
+                 style="width:100%; image-rendering:pixelated; display:block; border:1px solid #555;">
+            <span style="color:#aaa; font-size:9px; display:block; text-align:center;">VOL: HSV crudo | contorno elegido</span>
+          </div>
+        }
+      </div>
+      }
+
+      @if (svc.camActive) {
+      <div class="roi-overlay"
+           [style.left]="(svc.roiLcd.x1 * 100) + '%'"
+           [style.top]="(svc.roiLcd.y1 * 100) + '%'"
+           [style.width]="((svc.roiLcd.x2 - svc.roiLcd.x1) * 100) + '%'"
+           [style.height]="((svc.roiLcd.y2 - svc.roiLcd.y1) * 100) + '%'">
+        <span class="roi-overlay-label">LCD</span>
+      </div>
+      }
 
       @if (!svc.camActive) {
       <div class="cam-overlay">
@@ -86,90 +145,6 @@
       </button>
       }
     </div>
-
-    <!-- ══ RESULTADO DE LA CAPTURA ══════════════════════════════════════ -->
-    @if (svc.showCaptura) {
-    <div class="captura-result">
-
-      <!-- imagen con la elipse dibujada por el servidor -->
-      <img [src]="svc.capturaImg" alt="Captura del huevo con elipse de medicion">
-
-      <!-- categoria grande con color -->
-      <div class="captura-cat" [style.color]="svc.getCatColor(svc.capturaCat)">
-        {{ svc.capturaCat }}
-      </div>
-
-      <!-- ★ DATOS CLAVE: Peso · Volumen · Ejes -->
-      <div class="captura-datos">
-
-        <!-- PESO — prioridad maxima -->
-        <div class="dato-item dato-peso"
-             [class.dato-highlight]="svc.capturaConfianza === 'peso'">
-          <span class="dato-label">
-            Peso
-            @if (svc.capturaConfianza === 'peso') {
-            <span class="badge-fuente badge-bascula">Bascula</span>
-            }
-          </span>
-          <span class="dato-val">
-            @if (svc.capturaPeso !== null) { {{ svc.capturaPeso }} g }
-            @else { — }
-          </span>
-        </div>
-
-        <!-- VOLUMEN -->
-        <div class="dato-item dato-vol"
-             [class.dato-highlight]="svc.capturaConfianza === 'volumen'">
-          <span class="dato-label">
-            Volumen
-            @if (svc.capturaConfianza === 'volumen') {
-            <span class="badge-fuente badge-vision">Vision</span>
-            }
-          </span>
-          <span class="dato-val">{{ svc.capturaVol }} cm³</span>
-        </div>
-
-        <!-- EJES -->
-        @if (svc.capturaEjeMayor > 0) {
-        <div class="dato-item">
-          <span class="dato-label">Eje mayor</span>
-          <span class="dato-val">{{ svc.capturaEjeMayor }} mm</span>
-        </div>
-        <div class="dato-item">
-          <span class="dato-label">Eje menor</span>
-          <span class="dato-val">{{ svc.capturaEjeMenor }} mm</span>
-        </div>
-        }
-
-        <!-- FUENTE DE CLASIFICACION -->
-        <div class="dato-item dato-fuente-row">
-          <span class="dato-label">Clasificado por</span>
-          <span class="dato-val dato-fuente"
-                [class.fuente-peso]="svc.capturaConfianza === 'peso'"
-                [class.fuente-vision]="svc.capturaConfianza === 'volumen'"
-                [class.fuente-estimado]="svc.capturaConfianza === 'estimado'">
-            {{ svc.labelConfianza(svc.capturaConfianza) }}
-          </span>
-        </div>
-
-      </div><!-- /captura-datos -->
-
-      @if (svc.capturaError) {
-      <div class="captura-aviso">{{ svc.capturaError }}</div>
-      }
-
-      <div class="captura-actions">
-        <button class="btn btn-primary   btn-sm" (click)="svc.aceptarCaptura()">
-          ✓ Aceptar (Enter)
-        </button>
-        <button class="btn btn-secondary btn-sm" (click)="svc.showCaptura = false">
-          Descartar
-        </button>
-      </div>
-
-    </div><!-- /captura-result -->
-    }
-
   </div><!-- /cam-panel -->
 
   <!-- panel derecho: conteo + formulario -->

@@ -19,14 +19,11 @@ export interface PermisoModulo {
 const ROL_ACCESO: Record<string, string[]> = {
   admin:     ['dashboard', 'gallinas', 'clasificacion', 'inventario', 'reportes', 'manual', 'configuracion'],
   operador:  ['dashboard', 'gallinas', 'clasificacion', 'inventario', 'reportes', 'manual', 'configuracion'],
-  visitante: ['dashboard', 'reportes', 'manual', 'configuracion'],
+  visitante: ['dashboard', 'gallinas', 'clasificacion', 'inventario', 'reportes', 'manual'],
 };
 
-// Modulos sin control de permisos CRUD (no aparecen en la tabla `permisos` del backend).
-// 'manual' y 'configuracion' ya NO estan aqui: ahora tienen su propia fila de permiso
-// (puede_ver, etc) y se gestionan desde el panel de permisos del header, igual que
-// gallinas/clasificacion/inventario/reportes.
-const MODULOS_SIN_PERMISO = ['dashboard'];
+// Modulos sin control de permisos CRUD (siempre visibles para todos los usuarios autenticados).
+const MODULOS_SIN_PERMISO = ['dashboard', 'manual'];
 
 // Cache de los permisos reales del rol autenticado, traidos del backend en el login.
 // Esto no es editable desde el cliente: se sobreescribe por completo cada vez
@@ -61,10 +58,12 @@ export class AuthService {
    * Se llama siempre desde saveSession() y entrarComo(), asi que la cache
    * queda actualizada en cada inicio de sesion.
    */
-  private async cargarPermisosBackend(token: string): Promise<void> {
+  async refrescarPermisosBackend(token?: string): Promise<void> {
+    const tok = token || this.getToken();
+    if (!tok) return;
     try {
       const r = await fetch(`${config.apiUrl}/seguridad/permisos/mi-rol`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${tok}` },
       });
       const data = await r.json();
       sessionStorage.setItem(PERMISOS_BACKEND_KEY, JSON.stringify(Array.isArray(data) ? data : []));
@@ -102,7 +101,7 @@ export class AuthService {
       nombre: usuario,
       rol: rolFinal,
     }));
-    await this.cargarPermisosBackend(token);
+    await this.refrescarPermisosBackend(token);
     this.notificarEvento({
       titulo: 'Inicio de sesion',
       mensaje: `${usuario} inicio sesion como ${rolFinal}`,
@@ -122,7 +121,7 @@ export class AuthService {
       nombre: 'Visitante',
       rol: 'visitante',
     }));
-    await this.cargarPermisosBackend(data.access_token);
+    await this.refrescarPermisosBackend(data.access_token);
     this.notificarEvento({
       titulo: 'Inicio de sesion',
       mensaje: 'Visitante ingreso al sistema',

@@ -415,7 +415,9 @@ export class GallinasService {
   }
   // Calcula aves vivas de un lote: cantidad inicial menos total de bajas registradas
   avesVivas(lote: any): number {
-    const bajas = this.morts.filter((m) => m.lote_id === lote._id).reduce((s, m) => s + m.cant, 0);
+    const bajas = this.morts
+      .filter((m) => Number(m.lote_id) === Number(lote._id))
+      .reduce((s, m) => s + m.cant, 0);
     return Math.max(0, (lote.cant || 0) - bajas);
   }
 
@@ -747,6 +749,10 @@ export class GallinasService {
   }
 
   async guardarMort() {
+    if (!this.mortForm.lote_id) {
+      this.toast.error('Selecciona un lote');
+      return;
+    }
     if (!this.mortForm.cant || +this.mortForm.cant <= 0) {
       this.toast.error('Ingresa una cantidad');
       return;
@@ -756,13 +762,16 @@ export class GallinasService {
       return;
     }
 
-    // La causa ahora se manda por id (FK al catálogo real), no como texto
-    const body = {
+    // La causa ahora se manda por id (FK al catálogo real)
+    const body: any = {
       id_lote: +this.mortForm.lote_id,
       cantidad: +this.mortForm.cant,
       id_causa: +this.mortForm.causa_id,
       observaciones: this.mortForm.obs,
     };
+    if (this.mortForm.fecha) {
+      body.fecha = this.mortForm.fecha;
+    }
 
     try {
       if (this.editingMortId) {
@@ -770,7 +779,7 @@ export class GallinasService {
       } else {
         await this.api.post('/mortalidad', body);
       }
-      await this.cargarMorts();
+      await Promise.all([this.cargarMorts(), this.cargarLotes()]);
       this.mortForm = this.newMortForm();
       this.editingMortId = null;
       this.mortFormTitle = 'Registrar Mortalidad';
@@ -800,7 +809,7 @@ export class GallinasService {
     this.confirmCb = async () => {
       try {
         await this.api.delete(`/mortalidad/${r._id}`);
-        await this.cargarMorts();
+        await Promise.all([this.cargarMorts(), this.cargarLotes()]);
         this.toast.warning('Eliminado');
       } catch {
         this.toast.error('Error');

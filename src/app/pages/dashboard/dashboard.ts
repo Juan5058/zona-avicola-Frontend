@@ -201,18 +201,13 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
       if (!raw) return;
       const s = JSON.parse(raw);
 
+      // Solo restauramos que preset estaba activo (semana/mes/año). Las
+      // fechas NO se restauran literalmente: si se guardaron el 5 de agosto
+      // y hoy es 16 de agosto, quedaban congeladas en esa fecha vieja y
+      // cualquier venta/registro de hoy quedaba fuera del rango, mostrando
+      // $0 aunque si hubiera datos reales. calcFechasPorDefecto() las
+      // recalcula siempre en base a "ahora".
       if (s.periodoActivo) this._periodoActivo = s.periodoActivo;
-
-      // restaurar fechas solo si son validas
-      if (s.fechaIni && s.fechaFin) {
-        const ini = new Date(s.fechaIni);
-        const fin = new Date(s.fechaFin);
-        if (!isNaN(ini.getTime()) && !isNaN(fin.getTime())) {
-          this._fechaIni = s.fechaIni;
-          this._fechaFin = s.fechaFin;
-        }
-      }
-
     } catch { /* json invalido, ignorar */ }
   }
 
@@ -353,7 +348,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         .reduce((s: number, c: any) => s + (c.total || 0), 0);
 
       const clasifPeriodo   = (clasificaciones as any[]).filter(c => this.enRango(c.fecha));
-      const ventasPeriodo   = (ventas as any[]).filter(v => this.enRango(v.fecha));
+      const ventasPeriodo   = (ventas as any[]).filter(v => this.enRango(v.fecha_venta || v.fecha));
       const mortPeriodo     = (mortalidad as any[]).filter(m => this.enRango(m.fecha));
       const consumosPeriodo = (consumos as any[]).filter((c: any) => this.enRango(c.fecha));
 
@@ -458,7 +453,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
 
       const clasificadosAnt = (clasificaciones as any[]).filter(c => enRangoAnt(c.fecha)).reduce((s: number, c: any) => s + (c.total || 0), 0);
       const bajasAnt        = (mortalidad as any[]).filter(m => enRangoAnt(m.fecha)).reduce((s: number, m: any) => s + (m.cantidad || 0), 0);
-      const ingresosAnt     = (ventas as any[]).filter(v => enRangoAnt(v.fecha)).reduce((s: number, v: any) => s + Number(v.total || v.cantidad * v.precio_unitario || 0), 0);
+      const ingresosAnt     = (ventas as any[]).filter(v => enRangoAnt(v.fecha_venta || v.fecha)).reduce((s: number, v: any) => s + Number(v.total || v.cantidad * v.precio_unitario || 0), 0);
 
       this.cards[0].trend = this.calcTrend(huevosHoy, 0);
       this.cards[2].trend = this.calcTrend(ingresos, ingresosAnt);

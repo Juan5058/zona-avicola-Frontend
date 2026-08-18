@@ -74,8 +74,9 @@
               <button class="btn-add-opcion" (click)="svc.abrirAddOpcion('unidades','Unidad')" title="Agregar">+</button>
             </label>
             <select class="input-field" [(ngModel)]="svc.invForm.unidad">
-              @for (u of svc.opcionesUnidades; track u) {
-                <option [value]="u">{{ u }}</option>
+              <option value="">-- Seleccionar --</option>
+              @for (u of svc.opcionesUnidades; track u.id_unidad || u) {
+                <option [value]="u.id_unidad || u">{{ u.nombre || u.abreviatura || u }}</option>
               }
             </select>
           </div>
@@ -258,6 +259,19 @@
           </div>
         }
 
+        <!-- campo lote solo en salida -->
+        @if (svc.movTipo === 'salida') {
+          <div class="input-group">
+            <label class="input-label">Lote Destino (Opcional)</label>
+            <select class="input-field" [(ngModel)]="svc.movLoteId">
+              <option value="">Seleccionar lote...</option>
+              @for (l of svc.lotes; track l.id_lote) {
+                <option [value]="l.id_lote">{{ l.codigo }}</option>
+              }
+            </select>
+          </div>
+        }
+
         <div class="input-group">
           <label class="input-label">Cantidad *</label>
           <input class="input-field" type="number" [(ngModel)]="svc.movCantidad" placeholder="0" min="1">
@@ -326,13 +340,14 @@
                 <th class="col-fecha">Fecha</th>
                 <th class="col-item">Item</th>
                 <th class="col-cant">Movimiento</th>
+                <th class="col-lote">Lote</th>
                 <th class="col-alimento">Obs.</th>
                 <th class="col-acc-sm">Acc.</th>
               </tr>
             </thead>
             <tbody>
               @if (svc.movHistorialFiltrado.length === 0) {
-                <tr><td colspan="5" class="empty-cell">Sin movimientos registrados.</td></tr>
+                <tr><td colspan="6" class="empty-cell">Sin movimientos registrados.</td></tr>
               }
               @for (r of svc.movHistorialPage; track r._id) {
                 <tr>
@@ -346,6 +361,7 @@
                     }
                     <br><small class="badge" [ngClass]="r.tipo==='entrada' ? 'badge-green' : 'badge-orange'">{{ r.tipo }}</small>
                   </td>
+                  <td><small class="badge badge-gray">{{ r.lote || '—' }}</small></td>
                   <td><small class="text-muted">{{ r.obs || '—' }}</small></td>
                   <td>
                     <div class="td-actions">

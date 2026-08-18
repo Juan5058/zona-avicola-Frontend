@@ -33,7 +33,7 @@ const SVG_BELL   = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="2
 // Modulos con control CRUD real en la tabla `permisos` del backend.
 // dashboard y manual quedan fuera: siempre visibles segun el rol (ROL_ACCESO en auth.ts).
 // configuracion tambien queda fuera: es siempre admin-only, sin toggle configurable.
-const MODULOS_CRUD = ['gallinas', 'clasificacion', 'inventario', 'reportes', 'manual'] as const;
+const MODULOS_CRUD = ['gallinas', 'clasificacion', 'inventario', 'reportes'] as const;
 type ModuloCrud = typeof MODULOS_CRUD[number];
 
 const ACCIONES: { campo: 'puede_ver' | 'puede_crear' | 'puede_editar' | 'puede_eliminar' | 'puede_descargar'; label: string }[] = [
@@ -137,7 +137,6 @@ export class HeaderComponent implements OnInit, OnDestroy {
       clasificacion: { ...PERMISO_VACIO },
       inventario:    { ...PERMISO_VACIO },
       reportes:      { ...PERMISO_VACIO },
-      manual:        { ...PERMISO_VACIO },
     };
   }
 
@@ -302,6 +301,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
         });
       });
       await Promise.all(llamadas);
+      await this.auth.refrescarPermisosBackend();
       this.toast.success('Configuracion guardada');
       this.profileOpen = false;
     } catch {

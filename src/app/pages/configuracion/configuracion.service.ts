@@ -713,6 +713,16 @@ export class ConfiguracionService implements OnDestroy {
     this.confirmVisible = true;
   }
 
+  async reactivarUsr(u: any) {
+    try {
+      await this.api.patch(`/usuarios/${u.id_usuario}`, { activo: true });
+      await this.cargarUsuarios();
+      this.toast.success('Usuario reactivado');
+    } catch {
+      this.toast.error('Error al reactivar');
+    }
+  }
+
   // ─── Granja ──────────────────────────────────────────────────────────────────
 
   granjaDefault(): GranjaForm {
@@ -788,8 +798,10 @@ export class ConfiguracionService implements OnDestroy {
       });
       localStorage.setItem('cfg_reglas', JSON.stringify(this.reglas));
       localStorage.setItem('cfg_reglas_version', String(REGLAS_VERSION));
-      // Sincronizar el backend tambien, para que no vuelva a quedar con datos incompletos
-      try { await this.api.post('/configuracion/notificaciones', this.reglas); } catch { /* se sincroniza despues al guardar manualmente */ }
+      // NO se hace POST automatico al backend: los cambios del usuario solo
+      // se persisten cuando presiona "Guardar reglas". Si se enviara aqui,
+      // se pisaria lo que el usuario guardo con los valores por defecto cada
+      // vez que se actualiza el catalogo de reglas (REGLAS_VERSION sube).
       return;
     }
 
