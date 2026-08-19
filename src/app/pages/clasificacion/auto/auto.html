@@ -45,14 +45,7 @@
     <div class="enter-hint">
       Presiona <kbd>Espacio</kbd> o <kbd>Enter</kbd> para guardar la lectura actual
     </div>
-    @if (svc.roi) {
-    <div class="enter-hint">
-      El recuadro <strong style="color:#ff1744">rojo</strong> marca donde debe caer el display de la bascula
-      <button class="btn-reintentar" (click)="svc.cargarRoi()" title="Recargar tras recalibrar roi_config.json">
-        Refrescar calibracion
-      </button>
-    </div>
-    }
+
     }
 
     <!-- visor de video -->
@@ -93,7 +86,41 @@
         Actualizar lectura
       </button>
       }
+
+      @if (svc.camActive) {
+<button class="btn btn-secondary" (click)="svc.capturarYClasificar()" [disabled]="svc.procesando">
+  Capturar
+</button>
+<button class="btn btn-secondary" (click)="svc.abrirCalibracion()">
+  📐 Calibrar bascula
+</button>
+}
     </div>
+    @if (svc.calibrando) {
+<div class="modal-overlay show" (click)="svc.cancelarCalibracion()">
+  <div class="modal-box" style="max-width:700px;width:90%" (click)="$event.stopPropagation()">
+    <div class="modal-title">Calibrar posición de la báscula</div>
+    <p class="confirm-msg">
+      Arrastra el recuadro verde hasta que quede justo sobre el display de números
+      de la báscula. El tamaño del recuadro no cambia, solo la posición.
+    </p>
+    <div style="position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:8px;overflow:hidden;">
+      <canvas id="cam-calibracion-bg" style="width:100%;height:100%;display:block;"></canvas>
+      <canvas id="cam-calibracion-overlay"
+              style="width:100%;height:100%;display:block;position:absolute;top:0;left:0;cursor:move;"
+              (mousedown)="svc.onRoiMouseDown($event)"
+              (mousemove)="svc.onRoiMouseMove($event)"
+              (mouseup)="svc.onRoiMouseUp()"
+              (mouseleave)="svc.onRoiMouseUp()">
+      </canvas>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="svc.cancelarCalibracion()">Cancelar</button>
+      <button class="btn btn-primary" (click)="svc.guardarCalibracion()">Guardar posición</button>
+    </div>
+  </div>
+</div>
+}
 
     <!-- ══ LECTURA EN VIVO — siempre visible mientras la camara esta prendida ══ -->
     @if (svc.camActive) {
