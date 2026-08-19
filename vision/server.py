@@ -50,9 +50,10 @@ CATEGORIAS_VOLUMEN = [
 
 # ─── Deteccion del huevo por color (tonos cafe/marron) ──────────────────────
 # HSV: descarta blancos/grises de la hoja milimetrada (baja saturacion) y
-# tonos muy oscuros (sombra, bascula negra: value bajo).
-HSV_HUEVO_BAJO = np.array([6,   35,  90])
-HSV_HUEVO_ALTO = np.array([32, 200, 255])
+# lo verdaderamente negro (bascula, sombra dura). Rango ancho para cubrir
+# desde cafe claro hasta cafe oscuro (lado en sombra del huevo).
+HSV_HUEVO_BAJO = np.array([3,  25,  40])
+HSV_HUEVO_ALTO = np.array([32, 255, 255])
 AREA_MINIMA_HUEVO = 1500  # px^2, descarta ruido pequeno
 
 
@@ -214,29 +215,80 @@ def leer_peso_de_frame(frame_bgr):
 # ─── Deteccion del huevo + medicion por elipse ──────────────────────────────
 
 def detectar_contorno_huevo(frame_bgr):
-    """Segmenta por color (tonos cafe/marron, ignorando oscuros y la hoja
-    milimetrada blanca/gris) y devuelve el contorno mas grande encontrado,
-    suavizado para que bordes irregulares (cascara rota, brillos) no
-    desvien tanto el ajuste de la elipse. Devuelve None si no hay nada
-    que parezca un huevo."""
+    """Detecta el huevo en dos pasos:
+    1) Un filtro de color (tonos cafe) da una pista aproximada de donde
+       esta el huevo -> de ahi se saca un rectangulo de busqueda.
+    2) GrabCut refina esa region usando los bordes reales de la imagen
+       (contraste huevo/plato), no solo el color -- esto es lo que permite
+       recuperar el lado en sombra del huevo (mas oscuro/menos saturado)
+       sin tener que ampliar el rango de color hasta comerse el fondo, y
+       hace que el mismo ajuste sirva tanto con mucha luz como con poca.
+    Devuelve el contorno final o None si no hay nada que parezca un huevo.
+    """
+    h_frame, w_frame = frame_bgr.shape[:2]
+
     hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
-    mascara = cv2.inRange(hsv, HSV_HUEVO_BAJO, HSV_HUEVO_ALTO)
+    h, s, v = cv2.split(hsv)
+    clahe_v = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    v_eq = clahe_v.apply(v)
+    hsv_eq = cv2.merge([h, s, v_eq])
+    mascara_color = cv2.inRange(hsv_eq, HSV_HUEVO_BAJO, HSV_HUEVO_ALTO)
 
     kernel = np.ones((7, 7), np.uint8)
-    mascara = cv2.morphologyEx(mascara, cv2.MORPH_OPEN, kernel)
-    mascara = cv2.morphologyEx(mascara, cv2.MORPH_CLOSE, kernel)
+    mascara_color = cv2.morphologyEx(mascara_color, cv2.MORPH_OPEN, kernel)
+    mascara_color = cv2.morphologyEx(mascara_color, cv2.MORPH_CLOSE, kernel)
 
-    contornos, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contornos, _ = cv2.findContours(mascara_color, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contornos:
         return None
+    pista = max(contornos, key=cv2.contourArea)
+    if cv2.contourArea(pista) < AREA_MINIMA_HUEVO:
+        return None
 
-    mayor = max(contornos, key=cv2.contourArea)
+    # rectangulo de busqueda: la pista de color, agrandada bastante para dar
+    # espacio de sobra a la parte en sombra que el color por si solo no agarra
+    x, y, w, alto_r = cv2.boundingRect(pista)
+    margen_x = int(w * 0.7)
+    margen_y = int(alto_r * 0.7)
+    rx = max(0, x - margen_x)
+    ry = max(0, y - margen_y)
+    rw = min(w_frame - rx, w + 2 * margen_x)
+    rh = min(h_frame - ry, alto_r + 2 * margen_y)
+    if rw < 10 or rh < 10:
+        return None
+
+    try:
+        # nucleo "seguro es huevo": la pista de color erosionada, para
+        # anclar fuerte el modelo de color de GrabCut y que desde ahi
+        # crezca hacia el lado en sombra (conectado espacialmente)
+        nucleo = np.zeros((h_frame, w_frame), np.uint8)
+        cv2.drawContours(nucleo, [pista], -1, 255, thickness=cv2.FILLED)
+        nucleo = cv2.erode(nucleo, np.ones((15, 15), np.uint8))
+
+        mascara_gc = np.full((h_frame, w_frame), cv2.GC_BGD, np.uint8)
+        mascara_gc[ry:ry + rh, rx:rx + rw] = cv2.GC_PR_FGD
+        mascara_gc[nucleo == 255] = cv2.GC_FGD
+
+        bgd_model = np.zeros((1, 65), np.float64)
+        fgd_model = np.zeros((1, 65), np.float64)
+        cv2.grabCut(frame_bgr, mascara_gc, None,
+                    bgd_model, fgd_model, 5, cv2.GC_INIT_WITH_MASK)
+        mascara_final = np.where(
+            (mascara_gc == cv2.GC_FGD) | (mascara_gc == cv2.GC_PR_FGD), 255, 0
+        ).astype("uint8")
+    except cv2.error:
+        # si grabCut falla por algun motivo, usa la pista de color tal cual
+        mascara_final = mascara_color
+
+    mascara_final = cv2.morphologyEx(mascara_final, cv2.MORPH_CLOSE, kernel)
+    contornos_final, _ = cv2.findContours(mascara_final, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contornos_final:
+        return None
+
+    mayor = max(contornos_final, key=cv2.contourArea)
     if cv2.contourArea(mayor) < AREA_MINIMA_HUEVO or len(mayor) < 5:
         return None
 
-    # simplifica el contorno (quita picos sueltos de cascara rota/brillos
-    # que sesgan el ajuste de la elipse hacia afuera) — pero si la
-    # simplificacion deja muy pocos puntos, usa el contorno original
     perimetro = cv2.arcLength(mayor, True)
     simplificado = cv2.approxPolyDP(mayor, 0.002 * perimetro, True)
     if len(simplificado) >= 5:
@@ -262,6 +314,7 @@ def medir_huevo(frame_bgr, px_por_cm):
     una imagen anotada. Devuelve (0, 0, 0, None) si no se detecto huevo."""
     contorno = detectar_contorno_huevo(frame_bgr)
     if contorno is None:
+        print("medir_huevo: no se detecto un contorno de huevo valido en este frame")
         return 0.0, 0.0, 0.0, None
 
     (cx, cy), (ancho_px, alto_px), angulo = ajustar_elipse(contorno)
@@ -311,6 +364,27 @@ def roi():
     x, y, w, h = leer_roi_actual()
     return {"x": x, "y": y, "w": w, "h": h}
 
+
+class RoiPositionRequest(BaseModel):
+    x: int
+    y: int
+
+
+@app.get("/roi_actual")
+def roi_actual():
+    x, y, w, h = leer_roi_actual()
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
+@app.post("/mover_roi")
+def mover_roi(req: RoiPositionRequest):
+    """Cambia SOLO la posicion (x, y) del recuadro. El ancho y alto (w, h)
+    quedan intactos, tal como estaban calibrados."""
+    _, _, w, h = leer_roi_actual()
+    nuevo = [req.x, req.y, w, h]
+    with open(ROI_CONFIG_FILE, "w") as f:
+        json.dump(nuevo, f)
+    return {"status": "ok", "roi": nuevo}
 
 @app.post("/clasificar")
 def clasificar(req: FrameRequest):
